@@ -78,7 +78,8 @@ export default function BatchPengirimanPage() {
       try {
         const response = await apiClient.getStoresBySales(parseInt(formData.id_sales))
         if ((response as any).success) {
-          setAvailableStores((response as any).data.stores)
+          const storesData = (response as any).data
+          setAvailableStores(Array.isArray(storesData) ? storesData : [])
         }
       } catch (error) {
         console.error('Failed to load stores:', error)

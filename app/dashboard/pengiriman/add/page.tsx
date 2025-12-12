@@ -140,7 +140,8 @@ export default function AddPengirimanPage() {
         const response = await apiClient.getStoresBySales(formData.selectedSales)
         
         if ((response as any).success) {
-          setStores((response as any).data.stores)
+          const storesData = (response as any).data
+          setStores(Array.isArray(storesData) ? storesData : [])
           setStoreRows([])
           setSearchQuery('')
           setFilteredStores([])
@@ -172,7 +173,8 @@ export default function AddPengirimanPage() {
     }
 
     const query = searchQuery.toLowerCase()
-    const filtered = stores.filter(store => 
+    const sourceStores = Array.isArray(stores) ? stores : []
+    const filtered = sourceStores.filter(store => 
       !storeRows.some(row => row.id_toko === store.id_toko) && (
         store.nama_toko.toLowerCase().includes(query) ||
         store.kecamatan.toLowerCase().includes(query) ||

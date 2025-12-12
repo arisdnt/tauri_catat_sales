@@ -789,73 +789,53 @@ export default function CreatePenagihanPage() {
           </Alert>
         )}
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">Form Pembayaran</h1>
-            <p className="text-gray-600 text-sm sm:text-base">Buat penagihan untuk toko-toko yang sudah dikirim barang</p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Batal
-            </Button>
-          </div>
-        </div>
         <form id="penagihan-form" onSubmit={handleSubmit} className="space-y-8">
-          {/* Sales and Store Selection - No Card Styling */}
+          {/* Sales dan Pencarian Toko */}
           <div className="space-y-2">
-            {/* Sales Selection Row */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-600" />
-                <Label className="text-sm font-medium text-gray-700">Pilih Sales :</Label>
-              </div>
-              <div className="flex-1 max-w-sm">
-                <Select 
-                  value={formData.selectedSales?.toString() || ''} 
-                  onValueChange={(value) => updateFormData({ selectedSales: parseInt(value) })}
-                >
-                  <SelectTrigger className="h-10 text-sm">
-                    <SelectValue placeholder="-- Pilih Sales --" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(salesData as any[]).map((sales: any) => (
-                      <SelectItem key={sales.id_sales} value={sales.id_sales.toString()}>
-                        {sales.nama_sales}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Store Selection Row */}
-            {formData.selectedSales && (
-              <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1">
+                {/* Sales */}
                 <div className="flex items-center gap-2">
-                  <Search className="w-4 h-4 text-gray-600" />
-                  <Label className="text-sm font-medium text-gray-700">Pilih Toko :</Label>
+                  <User className="w-4 h-4 text-gray-600" />
+                  <Label className="text-sm font-medium text-gray-700">Pilih Sales :</Label>
                 </div>
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
-                    placeholder="Cari toko: nama, kecamatan, atau kabupaten..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    className="pl-10 h-10 text-sm"
-                  />
-                    
-                    {/* Search suggestions dropdown */}
-                    {showSuggestions && searchQuery && (
+                <div className="w-56">
+                  <Select 
+                    value={formData.selectedSales?.toString() || ''} 
+                    onValueChange={(value) => updateFormData({ selectedSales: parseInt(value) })}
+                  >
+                    <SelectTrigger className="h-10 text-sm">
+                      <SelectValue placeholder="-- Pilih Sales --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(salesData as any[]).map((sales: any) => (
+                        <SelectItem key={sales.id_sales} value={sales.id_sales.toString()}>
+                          {sales.nama_sales}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Pencarian Toko */}
+                <div className={`flex items-center gap-2 flex-1 ${!formData.selectedSales ? 'opacity-60' : ''}`}>
+                  <Search className="w-4 h-4 text-gray-600" />
+                  <div className="flex-1 relative">
+                    <Input
+                      type="text"
+                      placeholder={formData.selectedSales ? 'Cari toko: nama, kecamatan, atau kabupaten...' : 'Pilih sales terlebih dahulu'}
+                      value={searchQuery}
+                      onChange={(e) => formData.selectedSales && setSearchQuery(e.target.value)}
+                      onFocus={() => formData.selectedSales && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      className="pl-8 h-10 text-sm"
+                      disabled={!formData.selectedSales}
+                    />
+                    {/* Ikon di dalam input */}
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+
+                    {/* Dropdown hasil pencarian */}
+                    {formData.selectedSales && showSuggestions && searchQuery && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                         {filteredStores.length > 0 ? (
                           filteredStores.map(store => (
@@ -879,15 +859,28 @@ export default function CreatePenagihanPage() {
                       </div>
                     )}
                   </div>
-                  
-                  {storeRows.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1 rounded-md border border-green-200 ml-4">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="font-medium">{storeRows.length} toko</span>
-                    </div>
-                  )}
                 </div>
-            )}
+
+                {/* Badge jumlah toko */}
+                {storeRows.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1 rounded-md border border-green-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="font-medium">{storeRows.length} toko</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tombol Batal di kanan */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.back()}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Batal
+              </Button>
+            </div>
           </div>
 
           {/* Individual Store Sections */}
@@ -996,151 +989,148 @@ export default function CreatePenagihanPage() {
 
                   </div>
 
-                  {/* Ringkasan Barang Toko */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Left: Payment Details */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                          <DollarSign className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <h4 className="text-lg font-semibold text-gray-900">Detail Pembayaran</h4>
+                  {/* Detail Pembayaran di dalam box toko */}
+                  <div className="mt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <DollarSign className="w-5 h-5 text-blue-600" />
                       </div>
-                      
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <Label className="text-sm">Metode Bayar</Label>
-                            <Select
-                              value={row.metode_pembayaran}
-                              onValueChange={(value: 'Cash' | 'Transfer') => updateBillingInfo(storeIndex, 'metode_pembayaran', value)}
-                            >
-                              <SelectTrigger className="text-sm h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                                <SelectItem value="Transfer">Transfer</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div>
-                            <Label className="text-sm">Tanggal Pembayaran</Label>
-                            <Input
-                              type="date"
-                              value={row.tanggal_pembayaran}
-                              onChange={(e) => updateBillingInfo(storeIndex, 'tanggal_pembayaran', e.target.value)}
-                              className="text-sm h-8"
-                            />
-                          </div>
-                          
-                          <div>
-                            <Label className="text-sm">Total Diterima</Label>
-                            <Input
-                              type="text"
-                              value={`Rp ${row.total_uang_diterima.toLocaleString()}`}
-                              readOnly
-                              className="text-center font-bold text-green-600 bg-gray-50 text-sm h-8"
-                            />
-                          </div>
-                        </div>
-
+                      <h4 className="text-lg font-semibold text-gray-900">Detail Pembayaran</h4>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Checkbox
-                              checked={row.ada_potongan}
-                              onCheckedChange={(checked) => updateBillingInfo(storeIndex, 'ada_potongan', checked as boolean)}
-                            />
-                            <Label className="text-sm">Ada Potongan</Label>
-                          </div>
-                          
-                          {row.ada_potongan && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div>
-                                <Label className="text-sm">Jumlah Potongan</Label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={row.jumlah_potongan || ''}
-                                  onChange={(e) => updateBillingInfo(storeIndex, 'jumlah_potongan', parseFloat(e.target.value) || 0)}
-                                  className="text-sm h-8"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-sm">Alasan Potongan</Label>
-                                <Input
-                                  type="text"
-                                  value={row.alasan_potongan}
-                                  onChange={(e) => updateBillingInfo(storeIndex, 'alasan_potongan', e.target.value)}
-                                  className="text-sm h-8"
-                                  placeholder="Alasan potongan"
-                                />
-                              </div>
-                            </div>
-                          )}
+                          <Label className="text-sm">Metode Bayar</Label>
+                          <Select
+                            value={row.metode_pembayaran}
+                            onValueChange={(value: 'Cash' | 'Transfer') => updateBillingInfo(storeIndex, 'metode_pembayaran', value)}
+                          >
+                            <SelectTrigger className="text-sm h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Cash">Cash</SelectItem>
+                              <SelectItem value="Transfer">Transfer</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
+                        
+                        <div>
+                          <Label className="text-sm">Tanggal Pembayaran</Label>
+                          <Input
+                            type="date"
+                            value={row.tanggal_pembayaran}
+                            onChange={(e) => updateBillingInfo(storeIndex, 'tanggal_pembayaran', e.target.value)}
+                            className="text-sm h-8"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label className="text-sm">Total Diterima</Label>
+                          <Input
+                            type="text"
+                            value={`Rp ${row.total_uang_diterima.toLocaleString()}`}
+                            readOnly
+                            className="text-center font-bold text-green-600 bg-gray-50 text-sm h-8"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Checkbox
+                            checked={row.ada_potongan}
+                            onCheckedChange={(checked) => updateBillingInfo(storeIndex, 'ada_potongan', checked as boolean)}
+                          />
+                          <Label className="text-sm">Ada Potongan</Label>
+                        </div>
+                        
+                        {row.ada_potongan && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-sm">Jumlah Potongan</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={row.jumlah_potongan || ''}
+                                onChange={(e) => updateBillingInfo(storeIndex, 'jumlah_potongan', parseFloat(e.target.value) || 0)}
+                                className="text-sm h-8"
+                                placeholder="0"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Alasan Potongan</Label>
+                              <Input
+                                type="text"
+                                value={row.alasan_potongan}
+                                onChange={(e) => updateBillingInfo(storeIndex, 'alasan_potongan', e.target.value)}
+                                className="text-sm h-8"
+                                placeholder="Alasan potongan"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Right: Summary */}
-                    <div className="bg-white rounded-lg p-6 border border-gray-200">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                          <Receipt className="w-5 h-5 text-green-600" />
-                        </div>
-                        <h4 className="text-lg font-semibold text-gray-900">Ringkasan Barang</h4>
+                  {/* Ringkasan Barang Toko */}
+                  <div className="bg-white rounded-lg p-6 border border-gray-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <Receipt className="w-5 h-5 text-green-600" />
                       </div>
-                      
-                      <div className="space-y-3">
-                        {priorityProducts.map(product => {
-                          const quantity = row.priority_terjual[product.id_produk] || 0
-                          const amount = quantity * product.harga_satuan
-                          
-                          if (quantity === 0) return null
-                          
-                          return (
-                            <div key={`summary-${row.id_toko}-${product.id_produk}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900 text-sm">{product.nama_produk}</div>
-                                <div className="text-xs text-gray-500">
-                                  {quantity} pcs × Rp {product.harga_satuan.toLocaleString()}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-semibold text-gray-900 text-sm">
-                                  Rp {amount.toLocaleString()}
-                                </div>
+                      <h4 className="text-lg font-semibold text-gray-900">Ringkasan Barang</h4>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {priorityProducts.map(product => {
+                        const quantity = row.priority_terjual[product.id_produk] || 0
+                        const amount = quantity * product.harga_satuan
+                        
+                        if (quantity === 0) return null
+                        
+                        return (
+                          <div key={`summary-${row.id_toko}-${product.id_produk}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900 text-sm">{product.nama_produk}</div>
+                              <div className="text-xs text-gray-500">
+                                {quantity} pcs × Rp {product.harga_satuan.toLocaleString()}
                               </div>
                             </div>
-                          )
-                        })}
-                        
-                        {Object.values(row.priority_terjual).every(qty => qty === 0) && (
-                          <div className="text-center text-gray-500 py-4 text-sm">Belum ada barang terjual</div>
-                        )}
-                        
-                        {/* Total Section */}
-                        {Object.values(row.priority_terjual).some(qty => qty > 0) && (
-                          <div className="pt-3 border-t border-gray-200 mt-3">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <div className="font-semibold text-gray-900">Total</div>
-                                <div className="text-xs text-gray-500">
-                                  {Object.values(row.priority_terjual).reduce((sum, qty) => sum + qty, 0)} item
-                                  {row.ada_potongan ? ` • Potongan Rp ${row.jumlah_potongan.toLocaleString()}` : ''}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xl font-bold text-green-600">
-                                  Rp {row.total_uang_diterima.toLocaleString()}
-                                </div>
+                            <div className="text-right">
+                              <div className="font-semibold text-gray-900 text-sm">
+                                Rp {amount.toLocaleString()}
                               </div>
                             </div>
                           </div>
-                        )}
-                      </div>
+                        )
+                      })}
+                      
+                      {Object.values(row.priority_terjual).every(qty => qty === 0) && (
+                        <div className="text-center text-gray-500 py-4 text-sm">Belum ada barang terjual</div>
+                      )}
+                      
+                      {/* Total Section */}
+                      {Object.values(row.priority_terjual).some(qty => qty > 0) && (
+                        <div className="pt-3 border-t border-gray-200 mt-3">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-semibold text-gray-900">Total</div>
+                              <div className="text-xs text-gray-500">
+                                {Object.values(row.priority_terjual).reduce((sum, qty) => sum + qty, 0)} item
+                                {row.ada_potongan ? ` • Potongan Rp ${row.jumlah_potongan.toLocaleString()}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xl font-bold text-green-600">
+                                Rp {row.total_uang_diterima.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
