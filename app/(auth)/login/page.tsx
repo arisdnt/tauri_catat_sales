@@ -25,6 +25,16 @@ export default function LoginPage() {
     checkAuth()
   }, [router])
 
+  const handleClose = async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      const currentWindow = getCurrentWindow()
+      await currentWindow.close()
+    } catch (error) {
+      console.log('Not running in Tauri environment')
+    }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -46,8 +56,7 @@ export default function LoginPage() {
           title: 'Berhasil',
           description: 'Login berhasil, mengalihkan...',
         })
-        
-        // Simple direct redirect after successful login
+
         setTimeout(() => {
           window.location.href = '/dashboard'
         }, 500)
@@ -64,22 +73,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative">
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: 'url(/image/bg_login.jpg)',
-        }}
-      />
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-black/20" />
-      
-      {/* Content */}
-      <div className="relative z-10 w-full max-w-xs p-4">
-        <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-2xl border border-white/20 p-6">
+    <div className="h-screen w-screen flex overflow-hidden">
+      {/* Left Side - Image (80%) - Draggable */}
+      <div className="w-4/5 h-full relative" data-tauri-drag-region>
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none"
+          style={{
+            backgroundImage: 'url(/image/bg_login.jpg)',
+          }}
+        />
+        <div className="absolute inset-0 bg-black/10 pointer-events-none" />
+      </div>
+
+      {/* Right Side - Login Form (20%) - Draggable on empty areas */}
+      <div className="w-1/5 min-w-[280px] h-full bg-white flex flex-col" data-tauri-drag-region>
+        {/* Close Button */}
+        <div className="flex justify-end p-3">
+          <button
+            onClick={handleClose}
+            className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Tutup"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        {/* Form Container */}
+        <div className="flex-1 flex flex-col justify-center px-6">
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1">
+            <div>
               <Input
                 id="email"
                 type="email"
@@ -87,10 +122,12 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 border border-white/30 bg-white/20 backdrop-blur-sm text-white placeholder:text-white/70 focus:bg-white/30 focus:ring-2 focus:ring-white/50 transition-all duration-200 rounded-lg"
+                autoComplete="off"
+                className="h-11 border-gray-300 focus:border-gray-300 focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
               />
             </div>
-            <div className="space-y-1">
+
+            <div>
               <Input
                 id="password"
                 type="password"
@@ -98,18 +135,21 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-12 border border-white/30 bg-white/20 backdrop-blur-sm text-white placeholder:text-white/70 focus:bg-white/30 focus:ring-2 focus:ring-white/50 transition-all duration-200 rounded-lg"
+                autoComplete="off"
+                className="h-11 border-gray-300 focus:border-gray-300 focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full h-12 bg-white/20 hover:bg-white/30 border border-white/30 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl text-white backdrop-blur-sm" 
+
+            <Button
+              type="submit"
+              className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white font-medium"
               disabled={loading}
             >
               {loading ? 'Memproses...' : 'Masuk'}
             </Button>
           </form>
         </div>
+
       </div>
     </div>
   )

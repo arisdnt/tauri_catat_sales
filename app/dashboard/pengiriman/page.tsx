@@ -28,7 +28,7 @@ import { useNavigation } from '@/lib/hooks/use-navigation'
 import { useDashboardPengirimanQuery } from '@/lib/queries'
 import { useDeletePengirimanMutation } from '@/lib/queries/pengiriman'
 import { exportShipmentData } from '@/lib/excel-export'
-import { useDexieFilterOptions } from '@/lib/db/hooks'
+import { useFilterOptions } from '@/lib/db/hooks'
 import { INDONESIA_TIMEZONE, formatCurrency } from '@/lib/utils'
 
 // Helper functions
@@ -95,7 +95,7 @@ export default function ShippingPage() {
   })
 
   // Get filter options from Dexie
-  const { data: filterOptions } = useDexieFilterOptions()
+  const { data: filterOptions } = useFilterOptions()
 
   // Get pengiriman data from Dexie-backed dashboard view
   const { data: dashboardResult, isLoading, refetch } = useDashboardPengirimanQuery({

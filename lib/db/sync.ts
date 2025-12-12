@@ -87,6 +87,7 @@ type ViewTableName = keyof typeof VIEW_SYNC_CONFIG
 
 /**
  * Initial full sync - runs in background on app startup
+ * OPTIMIZED: Only syncs base tables on startup, views load in background
  */
 export async function initialSync() {
     if (isSyncing) {
@@ -96,15 +97,14 @@ export async function initialSync() {
 
     isSyncing = true
     emitSyncEvent({ type: 'start' })
-    console.log('[Sync] Starting initial sync...')
+    console.log('[Sync] Starting initial sync (base tables only)...')
 
     const tables = Object.keys(SYNC_CONFIG) as TableName[]
-    const viewTables = Object.keys(VIEW_SYNC_CONFIG) as ViewTableName[]
-    const totalItems = tables.length + viewTables.length
+    const totalItems = tables.length // Only base tables for faster startup
     syncProgress = {}
 
-    // Sync tables in parallel with concurrency limit
-    const concurrency = 3
+    // Sync tables in parallel with higher concurrency
+    const concurrency = 4
     let processed = 0
     for (let i = 0; i < tables.length; i += concurrency) {
         const batch = tables.slice(i, i + concurrency)
@@ -115,19 +115,28 @@ export async function initialSync() {
         emitSyncEvent({ type: 'progress', progress })
     }
 
-    // Then sync views (full fetch per view)
+    isSyncing = false
+    emitSyncEvent({ type: 'complete' })
+    console.log('[Sync] Initial sync complete! (Views loading in background)')
+
+    // Defer view sync to background after UI is responsive
+    setTimeout(() => syncViewsInBackground(), 2000)
+}
+
+/**
+ * Sync views in background - called after initial sync completes
+ */
+async function syncViewsInBackground() {
+    const viewTables = Object.keys(VIEW_SYNC_CONFIG) as ViewTableName[]
+    console.log('[Sync] Starting background view sync...')
+
+    const concurrency = 2
     for (let i = 0; i < viewTables.length; i += concurrency) {
         const batch = viewTables.slice(i, i + concurrency)
         await Promise.all(batch.map(table => syncViewTable(table)))
-
-        processed += batch.length
-        const progress = Math.round((processed / totalItems) * 100)
-        emitSyncEvent({ type: 'progress', progress })
     }
 
-    isSyncing = false
-    emitSyncEvent({ type: 'complete' })
-    console.log('[Sync] Initial sync complete!')
+    console.log('[Sync] Background view sync complete!')
 }
 
 /**

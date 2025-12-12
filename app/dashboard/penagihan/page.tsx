@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useNavigation } from '@/lib/hooks/use-navigation'
 
-import { useDexieFilterOptions } from '@/lib/db/hooks'
+import { useFilterOptions } from '@/lib/db/hooks'
 import { useDashboardPenagihanQuery } from '@/lib/queries'
 import { useDeletePenagihanMutation } from '@/lib/queries/penagihan'
 import { exportBillingData } from '@/lib/excel-export'
@@ -104,7 +104,7 @@ export default function PenagihanPage() {
   })
 
   // Get filter options from Dexie
-  const { data: filterOptions } = useDexieFilterOptions()
+  const { data: filterOptions } = useFilterOptions()
 
   // Get penagihan data from Supabase view v_penagihan_dashboard
   const { data: dashboardResult, isLoading, refetch } = useDashboardPenagihanQuery({
@@ -195,13 +195,13 @@ export default function PenagihanPage() {
   // Kecamatan options based on selected kabupaten
   const kecamatanOptions = useMemo(() => {
     // Prefer mapped kecamatan-by-kabupaten if available
-    const map = (filterOptions as any)?.data?.kecamatanByKabupaten as Record<string, string[]> | undefined
+    const map = filterOptions?.kecamatanByKabupaten as Record<string, string[]> | undefined
     if (map && filters.kabupaten !== 'all') {
       const list = map[filters.kabupaten] || []
       return list.map((k) => ({ kecamatan: k }))
     }
     // Fallback to flat kecamatan list
-    return (filterOptions as any)?.data?.kecamatan || []
+    return filterOptions?.kecamatan || []
   }, [filterOptions, filters.kabupaten])
 
   // Get detail produk info from dashboard view strings
@@ -278,7 +278,7 @@ export default function PenagihanPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Sales</SelectItem>
-                {filterOptions?.data?.sales?.map((s: any) => (
+                {filterOptions?.sales?.map((s: any) => (
                   <SelectItem key={s.id_sales} value={s.id_sales.toString()}>{s.nama_sales}</SelectItem>
                 ))}
               </SelectContent>
@@ -291,7 +291,7 @@ export default function PenagihanPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Kab.</SelectItem>
-                {filterOptions?.data?.kabupaten?.map((k: any) => (
+                {filterOptions?.kabupaten?.map((k: any) => (
                   <SelectItem key={k.kabupaten} value={k.kabupaten}>{k.kabupaten}</SelectItem>
                 ))}
               </SelectContent>

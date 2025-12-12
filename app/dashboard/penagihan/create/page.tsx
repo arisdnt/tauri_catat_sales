@@ -14,7 +14,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { apiClient } from '@/lib/api-client'
 import { useSalesQuery } from '@/lib/queries/sales'
 import { useCreatePenagihanMutation, penagihanKeys } from '@/lib/queries/penagihan'
-import { penagihanOptimizedKeys } from '@/lib/queries/penagihan-optimized'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCurrentDateIndonesia, INDONESIA_TIMEZONE } from '@/lib/utils'
 
@@ -81,29 +80,29 @@ export default function CreatePenagihanPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const createMutation = useCreatePenagihanMutation()
-  
+
   // Loading and error states
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Form data
   const [formData, setFormData] = useState<FormData>({
     selectedSales: null,
     autoRestock: true // Default to active
   })
-  
+
   // Product and store data
   const [stores, setStores] = useState<Store[]>([])
   const [priorityProducts, setPriorityProducts] = useState<PriorityProduct[]>([])
   const [nonPriorityProducts, setNonPriorityProducts] = useState<NonPriorityProduct[]>([])
   const [storeRows, setStoreRows] = useState<StoreRow[]>([])
-  
+
   // Search states
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredStores, setFilteredStores] = useState<Store[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  
+
   const { data: salesResponse, isLoading: salesLoading, error: salesError } = useSalesQuery()
   const salesData = (salesResponse as any)?.data || []
 
@@ -112,20 +111,20 @@ export default function CreatePenagihanPage() {
     const loadProducts = async () => {
       setIsLoading(true)
       setError(null)
-      
+
       try {
         const [priorityResponse, nonPriorityResponse] = await Promise.all([
           apiClient.getPriorityProducts(),
           apiClient.getNonPriorityProducts()
         ])
-        
+
         if ((priorityResponse as any).success) {
           const priorityData = (priorityResponse as any).data
           setPriorityProducts(Array.isArray(priorityData) ? priorityData : [])
         } else {
           throw new Error((priorityResponse as any).message || 'Failed to load priority products')
         }
-        
+
         if ((nonPriorityResponse as any).success) {
           const nonPriorityData = (nonPriorityResponse as any).data
           setNonPriorityProducts(Array.isArray(nonPriorityData) ? nonPriorityData : [])
@@ -144,7 +143,7 @@ export default function CreatePenagihanPage() {
         setIsLoading(false)
       }
     }
-    
+
     loadProducts()
   }, [toast])
 
@@ -161,10 +160,10 @@ export default function CreatePenagihanPage() {
 
       // Don't show loading state to prevent page reload appearance
       setError(null)
-      
+
       try {
         const response = await apiClient.getStoresBySales(formData.selectedSales)
-        
+
         if ((response as any).success) {
           const storesData = (response as any).data
           setStores(Array.isArray(storesData) ? storesData : [])
@@ -199,7 +198,7 @@ export default function CreatePenagihanPage() {
 
     const query = searchQuery.toLowerCase()
     const sourceStores = Array.isArray(stores) ? stores : []
-    const filtered = sourceStores.filter(store => 
+    const filtered = sourceStores.filter(store =>
       !storeRows.some(row => row.id_toko === store.id_toko) && (
         store.nama_toko.toLowerCase().includes(query) ||
         store.kecamatan.toLowerCase().includes(query) ||
@@ -218,7 +217,7 @@ export default function CreatePenagihanPage() {
       const calculatedTotal = calculateStoreTotal(row)
       const expectedTotal = calculatedTotal - (row.ada_potongan ? row.jumlah_potongan : 0)
       const actualTotal = row.total_uang_diterima
-      
+
       // Only update if there's a significant difference (avoiding floating point precision issues)
       if (Math.abs(expectedTotal - actualTotal) > 0.01) {
         setStoreRows(prev => {
@@ -277,10 +276,10 @@ export default function CreatePenagihanPage() {
     }
 
     setStoreRows(prev => [newStoreRow, ...prev])
-    
+
     setSearchQuery('')
     setShowSuggestions(false)
-    
+
     toast({
       title: 'Berhasil',
       description: `Toko ${store.nama_toko} berhasil ditambahkan`,
@@ -295,7 +294,7 @@ export default function CreatePenagihanPage() {
   // Update priority product quantities (only terjual)
   const updatePriorityQuantity = (storeIndex: number, productId: number, quantity: number) => {
     if (quantity < 0) return
-    
+
     setStoreRows(prev => {
       const newRows = [...prev]
       const updatedRow = {
@@ -305,16 +304,16 @@ export default function CreatePenagihanPage() {
           [productId]: quantity
         }
       }
-      
+
       // Calculate total immediately with updated data
       const calculatedTotal = calculateStoreTotal(updatedRow)
       const totalAfterDiscount = calculatedTotal - (updatedRow.ada_potongan ? updatedRow.jumlah_potongan : 0)
-      
+
       newRows[storeIndex] = {
         ...updatedRow,
         total_uang_diterima: Math.max(0, totalAfterDiscount)
       }
-      
+
       return newRows
     })
   }
@@ -327,15 +326,15 @@ export default function CreatePenagihanPage() {
         ...newRows[storeIndex],
         [field]: value
       }
-      
+
       // Auto-recalculate total when discount changes
       if (field === 'ada_potongan' || field === 'jumlah_potongan') {
         const calculatedTotal = calculateStoreTotal(updatedRow)
         const totalAfterDiscount = calculatedTotal - (updatedRow.ada_potongan ? updatedRow.jumlah_potongan : 0)
-        
+
         updatedRow.total_uang_diterima = Math.max(0, totalAfterDiscount)
       }
-      
+
       newRows[storeIndex] = updatedRow
       return newRows
     })
@@ -372,7 +371,7 @@ export default function CreatePenagihanPage() {
   // Update non-priority item
   const updateNonPriorityItem = (storeIndex: number, itemIndex: number, field: 'id_produk' | 'jumlah_terjual', value: number) => {
     if (field === 'jumlah_terjual' && value < 0) return
-    
+
     setStoreRows(prev => {
       const newRows = [...prev]
       const newItems = [...newRows[storeIndex].non_priority_items]
@@ -380,21 +379,21 @@ export default function CreatePenagihanPage() {
         ...newItems[itemIndex],
         [field]: value
       }
-      
+
       const updatedRow = {
         ...newRows[storeIndex],
         non_priority_items: newItems
       }
-      
+
       // Calculate total immediately with updated data
       const calculatedTotal = calculateStoreTotal(updatedRow)
       const totalAfterDiscount = calculatedTotal - (updatedRow.ada_potongan ? updatedRow.jumlah_potongan : 0)
-      
+
       newRows[storeIndex] = {
         ...updatedRow,
         total_uang_diterima: Math.max(0, totalAfterDiscount)
       }
-      
+
       return newRows
     })
   }
@@ -407,16 +406,16 @@ export default function CreatePenagihanPage() {
         ...newRows[storeIndex],
         non_priority_items: newRows[storeIndex].non_priority_items.filter((_, i) => i !== itemIndex)
       }
-      
+
       // Calculate total immediately with updated data
       const calculatedTotal = calculateStoreTotal(updatedRow)
       const totalAfterDiscount = calculatedTotal - (updatedRow.ada_potongan ? updatedRow.jumlah_potongan : 0)
-      
+
       newRows[storeIndex] = {
         ...updatedRow,
         total_uang_diterima: Math.max(0, totalAfterDiscount)
       }
-      
+
       return newRows
     })
   }
@@ -424,7 +423,7 @@ export default function CreatePenagihanPage() {
   // Calculate total nilai for a store
   const calculateStoreTotal = (row: StoreRow) => {
     let total = 0
-    
+
     // Priority products
     for (const [productId, terjual] of Object.entries(row.priority_terjual)) {
       const product = priorityProducts.find(p => p.id_produk === parseInt(productId))
@@ -432,7 +431,7 @@ export default function CreatePenagihanPage() {
         total += terjual * product.harga_satuan
       }
     }
-    
+
     // Non-priority products
     for (const item of row.non_priority_items) {
       const product = nonPriorityProducts.find(p => p.id_produk === item.id_produk)
@@ -440,7 +439,7 @@ export default function CreatePenagihanPage() {
         total += item.jumlah_terjual * product.harga_satuan
       }
     }
-    
+
     return total
   }
 
@@ -452,7 +451,7 @@ export default function CreatePenagihanPage() {
       const calculatedTotal = calculateStoreTotal(row)
       // Auto-calculate should consider discount
       const totalAfterDiscount = calculatedTotal - (row.ada_potongan ? row.jumlah_potongan : 0)
-      
+
       newRows[storeIndex] = {
         ...row,
         total_uang_diterima: Math.max(0, totalAfterDiscount) // Ensure non-negative
@@ -465,26 +464,26 @@ export default function CreatePenagihanPage() {
   const validateForm = (): string | null => {
     if (!formData.selectedSales) return 'Silakan pilih sales'
     if (storeRows.length === 0) return 'Silakan tambahkan minimal satu toko'
-    
+
     // Check if at least one store has items and payment info
     for (const row of storeRows) {
       const hasPriorityItems = Object.values(row.priority_terjual).some(qty => qty > 0)
-      const hasNonPriorityItems = row.non_priority_items.some(item => 
+      const hasNonPriorityItems = row.non_priority_items.some(item =>
         item.id_produk > 0 && item.jumlah_terjual > 0
       )
-      
+
       if (!hasPriorityItems && !hasNonPriorityItems) {
         return `Toko ${row.nama_toko} harus memiliki minimal satu item`
       }
-      
+
       if (row.total_uang_diterima < 0) {
         return `Total uang diterima untuk toko ${row.nama_toko} tidak boleh negatif`
       }
-      
+
       if (row.ada_potongan && row.jumlah_potongan < 0) {
         return `Jumlah potongan untuk toko ${row.nama_toko} tidak boleh negatif`
       }
-      
+
       // Validate non-priority items
       for (const item of row.non_priority_items) {
         if (item.id_produk === 0 && item.jumlah_terjual > 0) {
@@ -492,14 +491,14 @@ export default function CreatePenagihanPage() {
         }
       }
     }
-    
+
     return null
   }
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const validationError = validateForm()
     if (validationError) {
       toast({
@@ -512,12 +511,12 @@ export default function CreatePenagihanPage() {
 
     setIsSubmitting(true)
     setError(null)
-    
+
     try {
       // Process each store as separate billing
       for (const row of storeRows) {
         const details = []
-        
+
         // Add priority products (kembali always 0)
         for (const [productId, terjual] of Object.entries(row.priority_terjual)) {
           if (terjual > 0) {
@@ -528,7 +527,7 @@ export default function CreatePenagihanPage() {
             })
           }
         }
-        
+
         // Add non-priority products (kembali always 0)
         for (const item of row.non_priority_items) {
           if (item.id_produk > 0 && item.jumlah_terjual > 0) {
@@ -539,9 +538,9 @@ export default function CreatePenagihanPage() {
             })
           }
         }
-        
+
         if (details.length === 0) continue
-        
+
         const billingData = {
           id_toko: row.id_toko,
           total_uang_diterima: row.total_uang_diterima,
@@ -564,7 +563,7 @@ export default function CreatePenagihanPage() {
                   jumlah_kirim: quantity
                 })),
               // Non-priority products
-              ...row.additional_shipment.non_priority_details.filter(detail => 
+              ...row.additional_shipment.non_priority_details.filter(detail =>
                 detail.id_produk > 0 && detail.jumlah_kirim > 0
               )
             ]
@@ -572,27 +571,27 @@ export default function CreatePenagihanPage() {
         }
 
         const result = await apiClient.createBilling(billingData)
-        
+
         // Display success message with details about what was created
         if (result && (result as any).data) {
           const responseData = (result as any).data
           let successMessage = `Penagihan berhasil disimpan untuk toko ${row.nama_toko}`
-          
+
           if (formData.autoRestock && responseData.auto_restock_shipment) {
             successMessage += ` dengan auto-restock pengiriman`
           }
-          
+
           if (responseData.additional_shipment) {
             successMessage += ` dan pengiriman tambahan`
           }
-          
+
           toast({
             title: 'Berhasil',
             description: successMessage,
           })
         }
       }
-      
+
       toast({
         title: 'Berhasil',
         description: `Penagihan berhasil disimpan untuk ${storeRows.length} toko${formData.autoRestock ? ' dengan auto-restock' : ''}`,
@@ -601,19 +600,17 @@ export default function CreatePenagihanPage() {
       // Invalidate penagihan queries to refresh data
       queryClient.invalidateQueries({ queryKey: penagihanKeys.lists() })
       queryClient.invalidateQueries({ queryKey: penagihanKeys.all })
-      queryClient.invalidateQueries({ queryKey: penagihanOptimizedKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: penagihanOptimizedKeys.all })
       // Materialized views removed - using direct queries now
-      
+
       // Reset form after successful submission
-      setFormData({ 
+      setFormData({
         selectedSales: null,
         autoRestock: true
       })
       setStoreRows([])
       setSearchQuery('')
       setFilteredStores([])
-      
+
       // Navigate back to penagihan list page
       router.push('/dashboard/penagihan')
     } catch (err) {
@@ -650,7 +647,7 @@ export default function CreatePenagihanPage() {
   // Update priority product quantity in additional shipment
   const updateStoreAdditionalPriorityProduct = (storeIndex: number, productId: number, quantity: number) => {
     if (quantity < 0) return
-    
+
     setStoreRows(prev => {
       const newRows = [...prev]
       newRows[storeIndex] = {
@@ -666,7 +663,7 @@ export default function CreatePenagihanPage() {
       return newRows
     })
   }
-  
+
   // Toggle non-priority items in additional shipment
   const toggleStoreAdditionalNonPriority = (storeIndex: number, enabled: boolean) => {
     setStoreRows(prev => {
@@ -682,7 +679,7 @@ export default function CreatePenagihanPage() {
       return newRows
     })
   }
-  
+
   const addStoreAdditionalNonPriorityItem = (storeIndex: number) => {
     setStoreRows(prev => {
       const newRows = [...prev]
@@ -702,7 +699,7 @@ export default function CreatePenagihanPage() {
 
   const updateStoreAdditionalNonPriorityItem = (storeIndex: number, itemIndex: number, field: 'id_produk' | 'jumlah_kirim', value: number) => {
     if (field === 'jumlah_kirim' && value < 0) return
-    
+
     setStoreRows(prev => {
       const newRows = [...prev]
       const newDetails = [...newRows[storeIndex].additional_shipment.non_priority_details]
@@ -800,8 +797,8 @@ export default function CreatePenagihanPage() {
                   <Label className="text-sm font-medium text-gray-700">Pilih Sales :</Label>
                 </div>
                 <div className="w-56">
-                  <Select 
-                    value={formData.selectedSales?.toString() || ''} 
+                  <Select
+                    value={formData.selectedSales?.toString() || ''}
                     onValueChange={(value) => updateFormData({ selectedSales: parseInt(value) })}
                   >
                     <SelectTrigger className="h-10 text-sm">
@@ -916,12 +913,12 @@ export default function CreatePenagihanPage() {
                     {/* Products Input Table */}
                     <div className="border border-gray-200 rounded-lg overflow-hidden">
                       <div className="overflow-x-auto">
-                        <table className="w-full" style={{tableLayout: 'auto'}}>
+                        <table className="w-full" style={{ tableLayout: 'auto' }}>
                           <thead className="bg-gray-50">
                             <tr>
-                              <th 
-                                className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-r border-gray-200" 
-                                style={{width: '30%', minWidth: '200px'}}
+                              <th
+                                className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-r border-gray-200"
+                                style={{ width: '30%', minWidth: '200px' }}
                               >
                                 Nama Barang
                               </th>
@@ -929,10 +926,10 @@ export default function CreatePenagihanPage() {
                                 const count = priorityProducts.length || 1
                                 const productColumnWidth = `${Math.floor(60 / count)}%`
                                 return (
-                                  <th 
-                                    key={product.id_produk} 
+                                  <th
+                                    key={product.id_produk}
                                     className="px-3 py-3 text-center text-sm font-medium text-gray-700 border-r border-gray-200"
-                                    style={{width: productColumnWidth, minWidth: '100px'}}
+                                    style={{ width: productColumnWidth, minWidth: '100px' }}
                                   >
                                     <div className="space-y-1">
                                       <div className="font-semibold text-xs leading-tight">{product.nama_produk}</div>
@@ -941,9 +938,9 @@ export default function CreatePenagihanPage() {
                                   </th>
                                 )
                               })}
-                              <th 
+                              <th
                                 className="px-2 py-3 text-center text-sm font-medium text-gray-700"
-                                style={{width: '10%', minWidth: '80px'}}
+                                style={{ width: '10%', minWidth: '80px' }}
                               >
                                 Options
                               </th>
@@ -997,7 +994,7 @@ export default function CreatePenagihanPage() {
                       </div>
                       <h4 className="text-lg font-semibold text-gray-900">Detail Pembayaran</h4>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
@@ -1015,7 +1012,7 @@ export default function CreatePenagihanPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div>
                           <Label className="text-sm">Tanggal Pembayaran</Label>
                           <Input
@@ -1025,7 +1022,7 @@ export default function CreatePenagihanPage() {
                             className="text-sm h-8"
                           />
                         </div>
-                        
+
                         <div>
                           <Label className="text-sm">Total Diterima</Label>
                           <Input
@@ -1045,7 +1042,7 @@ export default function CreatePenagihanPage() {
                           />
                           <Label className="text-sm">Ada Potongan</Label>
                         </div>
-                        
+
                         {row.ada_potongan && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
@@ -1083,14 +1080,14 @@ export default function CreatePenagihanPage() {
                       </div>
                       <h4 className="text-lg font-semibold text-gray-900">Ringkasan Barang</h4>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {priorityProducts.map(product => {
                         const quantity = row.priority_terjual[product.id_produk] || 0
                         const amount = quantity * product.harga_satuan
-                        
+
                         if (quantity === 0) return null
-                        
+
                         return (
                           <div key={`summary-${row.id_toko}-${product.id_produk}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                             <div className="flex-1">
@@ -1107,11 +1104,11 @@ export default function CreatePenagihanPage() {
                           </div>
                         )
                       })}
-                      
+
                       {Object.values(row.priority_terjual).every(qty => qty === 0) && (
                         <div className="text-center text-gray-500 py-4 text-sm">Belum ada barang terjual</div>
                       )}
-                      
+
                       {/* Total Section */}
                       {Object.values(row.priority_terjual).some(qty => qty > 0) && (
                         <div className="pt-3 border-t border-gray-200 mt-3">
@@ -1144,7 +1141,7 @@ export default function CreatePenagihanPage() {
                   </div>
                   <h4 className="text-lg font-semibold text-gray-900">Ringkasan Keseluruhan</h4>
                 </div>
-                
+
                 <div className="border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <div>
@@ -1175,7 +1172,7 @@ export default function CreatePenagihanPage() {
                 </div>
                 <h4 className="text-lg font-semibold text-gray-900">Pengaturan Auto-restock</h4>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <Checkbox
                   checked={formData.autoRestock}
@@ -1186,7 +1183,7 @@ export default function CreatePenagihanPage() {
                   Aktifkan auto-restock (otomatis kirim ulang barang yang terjual)
                 </Label>
               </div>
-              
+
               {formData.autoRestock && (
                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
                   <p className="text-sm text-green-700">
@@ -1200,73 +1197,73 @@ export default function CreatePenagihanPage() {
           {/* Status Information & Total Transaction */}
           {storeRows.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Left Column - Store Status */}
-                    <div className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Store Status */}
+                <div className="space-y-4">
 
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-green-800">Toko siap ditagih:</span>
-                          <span className="text-2xl font-bold text-green-900">{storeRows.length}</span>
-                        </div>
-                        
-                        <div className="flex flex-wrap gap-2">
-                          {formData.autoRestock && (
-                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-                              Auto-restock aktif
-                            </span>
-                          )}
-                          {(() => {
-                            const additionalShipmentCount = storeRows.reduce((count, row) => {
-                              if (!row.additional_shipment.enabled) return count
-                              
-                              const priorityCount = Object.values(row.additional_shipment.priority_products)
-                                .filter(qty => qty > 0).length
-                              const nonPriorityCount = row.additional_shipment.non_priority_details
-                                .filter(detail => detail.id_produk > 0 && detail.jumlah_kirim > 0).length
-                              
-                              return count + priorityCount + nonPriorityCount
-                            }, 0)
-                            return additionalShipmentCount > 0 && (
-                              <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
-                                {additionalShipmentCount} item tambahan
-                              </span>
-                            )
-                          })()}
-                        </div>
-                      </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-green-800">Toko siap ditagih:</span>
+                      <span className="text-2xl font-bold text-green-900">{storeRows.length}</span>
                     </div>
 
-                    {/* Right Column - Total Transaction */}
-                    <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {formData.autoRestock && (
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                          Auto-restock aktif
+                        </span>
+                      )}
+                      {(() => {
+                        const additionalShipmentCount = storeRows.reduce((count, row) => {
+                          if (!row.additional_shipment.enabled) return count
 
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-amber-800">Total nominal:</span>
-                          <span className="text-2xl font-bold text-amber-900">
-                            Rp {storeRows.reduce((total, row) => {
-                              return total + row.total_uang_diterima
-                            }, 0).toLocaleString()}
+                          const priorityCount = Object.values(row.additional_shipment.priority_products)
+                            .filter(qty => qty > 0).length
+                          const nonPriorityCount = row.additional_shipment.non_priority_details
+                            .filter(detail => detail.id_produk > 0 && detail.jumlah_kirim > 0).length
+
+                          return count + priorityCount + nonPriorityCount
+                        }, 0)
+                        return additionalShipmentCount > 0 && (
+                          <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
+                            {additionalShipmentCount} item tambahan
                           </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-amber-800">Status:</span>
-                          <span className="text-sm">
-                            {storeRows.reduce((total, row) => {
-                              const subtotal = calculateStoreTotal(row)
-                              const discount = row.ada_potongan ? row.jumlah_potongan : 0
-                              return total + subtotal - discount
-                            }, 0) !== storeRows.reduce((total, row) => total + row.total_uang_diterima, 0) ? (
-                              <span className="text-red-600">⚠ Periksa perhitungan</span>
-                            ) : (
-                              <span className="text-green-600">✓ Perhitungan sesuai</span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
+                        )
+                      })()}
                     </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Total Transaction */}
+                <div className="space-y-4">
+
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-800">Total nominal:</span>
+                      <span className="text-2xl font-bold text-amber-900">
+                        Rp {storeRows.reduce((total, row) => {
+                          return total + row.total_uang_diterima
+                        }, 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-800">Status:</span>
+                      <span className="text-sm">
+                        {storeRows.reduce((total, row) => {
+                          const subtotal = calculateStoreTotal(row)
+                          const discount = row.ada_potongan ? row.jumlah_potongan : 0
+                          return total + subtotal - discount
+                        }, 0) !== storeRows.reduce((total, row) => total + row.total_uang_diterima, 0) ? (
+                          <span className="text-red-600">⚠ Periksa perhitungan</span>
+                        ) : (
+                          <span className="text-green-600">✓ Perhitungan sesuai</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

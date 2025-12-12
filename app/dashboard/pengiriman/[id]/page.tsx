@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { usePengirimanDetailQuery } from '@/lib/queries/pengiriman'
 import { useNavigation } from '@/lib/hooks/use-navigation'
-import { formatDate } from '@/components/data-tables'
+import { formatDate } from '@/lib/utils'
 
 export default function PengirimanDetailPage() {
   const params = useParams()
@@ -50,7 +50,7 @@ export default function PengirimanDetailPage() {
       }
     `
     document.head.appendChild(style)
-    
+
     return () => {
       document.head.removeChild(style)
     }
@@ -125,8 +125,8 @@ export default function PengirimanDetailPage() {
               <Receipt className="w-4 h-4" />
               Print
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => navigate('/dashboard/pengiriman')}
               className="flex items-center gap-2"
@@ -148,7 +148,7 @@ export default function PengirimanDetailPage() {
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">SHIPMENT DOCUMENT</h1>
                 <p className="text-sm text-gray-600">Sistem Penjualan Titip Bayar</p>
               </div>
-              
+
               {/* Shipment Details */}
               <div className="flex-shrink-0">
                 <div className="bg-white border border-gray-200 rounded p-3 space-y-1">
@@ -186,7 +186,7 @@ export default function PengirimanDetailPage() {
                   </p>
                 </div>
               </div>
-              
+
               {/* Sales Representative */}
               <div>
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Sales Representative</h3>
@@ -209,7 +209,7 @@ export default function PengirimanDetailPage() {
           {/* Shipment Items Table */}
           <div className="p-6">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Shipped Items</h3>
-            
+
             {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -262,7 +262,7 @@ export default function PengirimanDetailPage() {
                   <p className="text-xs text-gray-600">Ready for delivery</p>
                 </div>
               </div>
-              
+
               {/* Right side - Totals */}
               <div className="w-full md:w-64">
                 <div className="bg-white border border-gray-200 rounded p-4">
@@ -272,9 +272,9 @@ export default function PengirimanDetailPage() {
                         <span className="text-gray-600">Total Quantity:</span>
                         <span className="font-medium">{calculations.totalQuantity} pcs</span>
                       </div>
-                      
+
                       <Separator className="my-2" />
-                      
+
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total Value:</span>
                         <span className="text-green-600">Rp {calculations.totalValue.toLocaleString("id-ID")}</span>

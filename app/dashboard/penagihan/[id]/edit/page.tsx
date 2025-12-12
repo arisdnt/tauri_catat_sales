@@ -27,7 +27,7 @@ import {
 import { usePenagihanDetailQuery, useUpdatePenagihanMutation, type UpdatePenagihanData } from '@/lib/queries/penagihan'
 import { useProdukQuery } from '@/lib/queries/produk'
 import { useNavigation } from '@/lib/hooks/use-navigation'
-import { formatCurrency } from '@/components/data-tables'
+import { formatCurrency } from '@/lib/utils'
 
 interface ProductDetail {
   id_detail_tagih?: number
@@ -60,7 +60,7 @@ export default function EditPenagihanPage() {
   const { data: response, isLoading, error } = usePenagihanDetailQuery(id)
   const { data: productsResponse } = useProdukQuery()
   const updatePenagihan = useUpdatePenagihanMutation()
-  
+
   const penagihan = (response as { data: any })?.data
   const products = useMemo(() => {
     const data = (productsResponse as any)?.data?.data || []
@@ -102,10 +102,10 @@ export default function EditPenagihanPage() {
       const product = products.find(p => p.id_produk === detail.id_produk)
       return sum + (detail.jumlah_terjual * (product?.harga_satuan || 0))
     }, 0)
-    
+
     const discount = formData.ada_potongan ? (formData.potongan?.jumlah_potongan || 0) : 0
     const calculatedTotal = subtotal - discount
-    
+
     return {
       subtotal,
       discount,
@@ -126,7 +126,7 @@ export default function EditPenagihanPage() {
 
   // Auto-update total uang diterima when details or discount changes (optional)
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false)
-  
+
   useEffect(() => {
     if (autoUpdateEnabled && calculations.calculatedTotal > 0) {
       setFormData(prev => ({
@@ -161,7 +161,7 @@ export default function EditPenagihanPage() {
         ...newDetails[index],
         [field]: value
       }
-      
+
       // Update product info when product is selected
       if (field === 'id_produk') {
         const product = products.find(p => p.id_produk === value)
@@ -169,7 +169,7 @@ export default function EditPenagihanPage() {
           newDetails[index].produk = product
         }
       }
-      
+
       return {
         ...prev,
         details: newDetails
@@ -208,7 +208,7 @@ export default function EditPenagihanPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const validationError = validateForm()
     if (validationError) {
       toast({
@@ -220,7 +220,7 @@ export default function EditPenagihanPage() {
     }
 
     setIsSubmitting(true)
-    
+
     try {
       const updateData: UpdatePenagihanData = {
         total_uang_diterima: formData.total_uang_diterima,
@@ -237,12 +237,12 @@ export default function EditPenagihanPage() {
       }
 
       await updatePenagihan.mutateAsync({ id, data: updateData })
-      
+
       toast({
         title: 'Berhasil',
         description: 'Penagihan berhasil diperbarui'
       })
-      
+
       navigate(`/dashboard/penagihan/${id}`)
     } catch (error: unknown) {
       toast({
@@ -382,7 +382,7 @@ export default function EditPenagihanPage() {
                               </Button>
                             )}
                           </div>
-                          
+
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2">
                               <Label htmlFor={`product-${index}`} className="text-xs font-medium text-gray-600 uppercase tracking-wide">Produk</Label>
@@ -403,7 +403,7 @@ export default function EditPenagihanPage() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            
+
                             <div>
                               <Label htmlFor={`sold-${index}`} className="text-xs font-medium text-gray-600 uppercase tracking-wide">Terjual</Label>
                               <Input
@@ -417,7 +417,7 @@ export default function EditPenagihanPage() {
                                 className="mt-1 h-9"
                               />
                             </div>
-                            
+
                             <div>
                               <Label htmlFor={`returned-${index}`} className="text-xs font-medium text-gray-600 uppercase tracking-wide">Kembali</Label>
                               <Input
@@ -432,7 +432,7 @@ export default function EditPenagihanPage() {
                               />
                             </div>
                           </div>
-                          
+
                           {product && (
                             <div className="mt-4 pt-3 border-t border-gray-200">
                               <div className="grid grid-cols-3 gap-4 text-xs">
@@ -464,7 +464,7 @@ export default function EditPenagihanPage() {
                         </div>
                       )
                     })}
-                    
+
                     {formData.details.length === 0 && (
                       <div className="text-center py-8 text-gray-500">
                         <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -484,7 +484,7 @@ export default function EditPenagihanPage() {
                 </div>
               </div>
             </div>
-            
+
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Payment Information */}
@@ -511,7 +511,7 @@ export default function EditPenagihanPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <Label htmlFor="total-received" className="text-xs font-medium text-gray-600 uppercase tracking-wide">Total Uang Diterima</Label>
@@ -555,13 +555,12 @@ export default function EditPenagihanPage() {
                         }
                       }}
                       disabled={autoUpdateEnabled}
-                      className={`mt-1 h-9 ${
-                        autoUpdateEnabled
-                          ? 'bg-gray-100 cursor-not-allowed'
-                          : isDifferentFromCalculated && calculations.calculatedTotal > 0
+                      className={`mt-1 h-9 ${autoUpdateEnabled
+                        ? 'bg-gray-100 cursor-not-allowed'
+                        : isDifferentFromCalculated && calculations.calculatedTotal > 0
                           ? 'border-orange-300 bg-orange-50 focus:border-orange-500 focus:ring-orange-500'
                           : ''
-                      }`}
+                        }`}
                     />
                     {!autoUpdateEnabled && isDifferentFromCalculated && calculations.calculatedTotal > 0 && (
                       <p className="text-xs text-orange-600 mt-1">
@@ -574,37 +573,36 @@ export default function EditPenagihanPage() {
                       </p>
                     )}
                   </div>
-                  
+
                   <Separator className="my-3" />
-                  
+
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Subtotal</span>
                       <span className="font-medium text-gray-900">{formatCurrency(calculations.subtotal)}</span>
                     </div>
-                    
+
                     {formData.ada_potongan && calculations.discount > 0 && (
                       <div className="flex justify-between items-center text-red-600">
                         <span>Potongan</span>
                         <span className="font-medium">-{formatCurrency(calculations.discount)}</span>
                       </div>
                     )}
-                    
+
                     <Separator className="my-2" />
-                    
+
                     <div className="flex justify-between items-center p-3 bg-green-50 rounded-md">
                       <span className="font-semibold text-gray-900">Total Kalkulasi</span>
                       <span className="font-bold text-green-600">{formatCurrency(calculations.calculatedTotal)}</span>
                     </div>
-                    
+
                     {isDifferentFromCalculated && calculations.calculatedTotal > 0 && (
                       <div className="flex justify-between items-center p-3 bg-orange-50 rounded-md border border-orange-200">
                         <span className="font-semibold text-gray-900">Selisih</span>
-                        <span className={`font-bold ${
-                          formData.total_uang_diterima > calculations.calculatedTotal
-                            ? 'text-green-600'
-                            : 'text-red-600'
-                        }`}>
+                        <span className={`font-bold ${formData.total_uang_diterima > calculations.calculatedTotal
+                          ? 'text-green-600'
+                          : 'text-red-600'
+                          }`}>
                           {formData.total_uang_diterima > calculations.calculatedTotal ? '+' : ''}
                           {formatCurrency(formData.total_uang_diterima - calculations.calculatedTotal)}
                         </span>
@@ -637,7 +635,7 @@ export default function EditPenagihanPage() {
                     />
                     <Label htmlFor="has-discount" className="text-sm font-medium text-gray-700">Ada potongan</Label>
                   </div>
-                  
+
                   {formData.ada_potongan && (
                     <div className="space-y-4">
                       <div>
@@ -659,7 +657,7 @@ export default function EditPenagihanPage() {
                           className="mt-1 h-9"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="discount-reason" className="text-xs font-medium text-gray-600 uppercase tracking-wide">Alasan Potongan</Label>
                         <Textarea

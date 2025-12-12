@@ -5,14 +5,14 @@ import { QueryProvider } from '@/components/providers/query-provider'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { Toaster } from '@/components/ui/toaster'
 import { SyncProvider } from '@/lib/db'
-import { DesktopNavbar } from '@/components/navigation/desktop-navbar'
-import { DesktopToolbar } from '@/components/navigation/desktop-toolbar'
+import { Navbar } from '@/components/navigation/navbar'
+import { Toolbar } from '@/components/navigation/toolbar'
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* Top Navbar - Fixed height */}
-      <DesktopNavbar />
+      <Navbar />
 
       {/* Main Content - Fills remaining space, internal scroll */}
       <main className="flex-1 pt-12 pb-6 overflow-hidden">
@@ -22,7 +22,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom Toolbar - Fixed height */}
-      <DesktopToolbar />
+      <Toolbar />
     </div>
   )
 }

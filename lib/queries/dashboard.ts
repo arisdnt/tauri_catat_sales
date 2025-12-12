@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { supabase } from '@/lib/supabase'
-import { useDexieQuery } from '@/lib/db/hooks'
 
 // Dashboard View Types
 export interface DashboardPenagihan {
@@ -434,13 +433,11 @@ export function useMasterSalesQuery(params?: {
   start_date?: string
   end_date?: string
 }) {
-  return useDexieQuery(
-    ['sales', 'masterSales', JSON.stringify(params || {})],
-    () => apiClient.getMasterSales(params) as Promise<ApiResponse<MasterSales[]>>,
-    {
-      staleTime: 1000 * 60 * 5,
-    }
-  )
+  return useQuery({
+    queryKey: ['sales', 'masterSales', JSON.stringify(params || {})],
+    queryFn: () => apiClient.getMasterSales(params) as Promise<ApiResponse<MasterSales[]>>,
+    staleTime: 1000 * 60 * 5,
+  })
 }
 
 // Filter Options Queries
