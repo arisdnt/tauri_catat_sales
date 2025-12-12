@@ -1,0 +1,178 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.detail_penagihan (
+  id_detail_tagih integer NOT NULL DEFAULT nextval('detail_penagihan_id_detail_tagih_seq'::regclass),
+  id_penagihan integer NOT NULL,
+  id_produk integer NOT NULL,
+  jumlah_terjual integer NOT NULL CHECK (jumlah_terjual >= 0),
+  jumlah_kembali integer NOT NULL CHECK (jumlah_kembali >= 0),
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT detail_penagihan_pkey PRIMARY KEY (id_detail_tagih),
+  CONSTRAINT detail_penagihan_id_penagihan_fkey FOREIGN KEY (id_penagihan) REFERENCES public.penagihan(id_penagihan),
+  CONSTRAINT detail_penagihan_id_produk_fkey FOREIGN KEY (id_produk) REFERENCES public.produk(id_produk)
+);
+CREATE TABLE public.detail_pengiriman (
+  id_detail_kirim integer NOT NULL DEFAULT nextval('detail_pengiriman_id_detail_kirim_seq'::regclass),
+  id_pengiriman integer NOT NULL,
+  id_produk integer NOT NULL,
+  jumlah_kirim integer NOT NULL CHECK (jumlah_kirim > 0),
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT detail_pengiriman_pkey PRIMARY KEY (id_detail_kirim),
+  CONSTRAINT detail_pengiriman_id_pengiriman_fkey FOREIGN KEY (id_pengiriman) REFERENCES public.pengiriman(id_pengiriman),
+  CONSTRAINT detail_pengiriman_id_produk_fkey FOREIGN KEY (id_produk) REFERENCES public.produk(id_produk)
+);
+CREATE TABLE public.penagihan (
+  id_penagihan integer NOT NULL DEFAULT nextval('penagihan_id_penagihan_seq'::regclass),
+  id_toko integer NOT NULL,
+  total_uang_diterima numeric NOT NULL CHECK (total_uang_diterima >= 0::numeric),
+  metode_pembayaran character varying NOT NULL CHECK (metode_pembayaran::text = ANY (ARRAY['Cash'::character varying::text, 'Transfer'::character varying::text])),
+  ada_potongan boolean DEFAULT false,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT penagihan_pkey PRIMARY KEY (id_penagihan),
+  CONSTRAINT penagihan_id_toko_fkey FOREIGN KEY (id_toko) REFERENCES public.toko(id_toko)
+);
+CREATE TABLE public.pengeluaran_operasional (
+  id_pengeluaran integer NOT NULL DEFAULT nextval('pengeluaran_operasional_id_pengeluaran_seq'::regclass),
+  jumlah numeric NOT NULL,
+  keterangan text NOT NULL,
+  url_bukti_foto text,
+  tanggal_pengeluaran timestamp with time zone NOT NULL,
+  dibuat_pada timestamp with time zone DEFAULT now(),
+  diperbarui_pada timestamp with time zone DEFAULT now(),
+  CONSTRAINT pengeluaran_operasional_pkey PRIMARY KEY (id_pengeluaran)
+);
+CREATE TABLE public.pengiriman (
+  id_pengiriman integer NOT NULL DEFAULT nextval('pengiriman_id_pengiriman_seq'::regclass),
+  id_toko integer NOT NULL,
+  tanggal_kirim date NOT NULL,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  is_autorestock boolean DEFAULT false,
+  CONSTRAINT pengiriman_pkey PRIMARY KEY (id_pengiriman),
+  CONSTRAINT pengiriman_id_toko_fkey FOREIGN KEY (id_toko) REFERENCES public.toko(id_toko)
+);
+CREATE TABLE public.potongan_penagihan (
+  id_potongan integer NOT NULL DEFAULT nextval('potongan_penagihan_id_potongan_seq'::regclass),
+  id_penagihan integer NOT NULL,
+  jumlah_potongan numeric NOT NULL CHECK (jumlah_potongan >= 0::numeric),
+  alasan text,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT potongan_penagihan_pkey PRIMARY KEY (id_potongan),
+  CONSTRAINT potongan_penagihan_id_penagihan_fkey FOREIGN KEY (id_penagihan) REFERENCES public.penagihan(id_penagihan)
+);
+CREATE TABLE public.produk (
+  id_produk integer NOT NULL DEFAULT nextval('produk_id_produk_seq'::regclass),
+  nama_produk character varying NOT NULL,
+  harga_satuan numeric NOT NULL,
+  status_produk boolean DEFAULT true,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  is_priority boolean DEFAULT false,
+  priority_order integer DEFAULT 0,
+  CONSTRAINT produk_pkey PRIMARY KEY (id_produk)
+);
+CREATE TABLE public.public_toko (
+  id_toko integer NOT NULL,
+  nama_toko character varying NOT NULL,
+  kabupaten character varying,
+  kecamatan character varying,
+  link_gmaps text,
+  latitude numeric,
+  longitude numeric,
+  alamat_gmaps text,
+  alamat_fetched boolean DEFAULT false,
+  produk_tersedia jsonb,
+  diperbarui_pada timestamp with time zone DEFAULT now(),
+  fetch_attempts integer DEFAULT 0,
+  last_fetch_attempt timestamp with time zone,
+  fetch_disabled boolean DEFAULT false,
+  fetch_error_message text,
+  CONSTRAINT public_toko_pkey PRIMARY KEY (id_toko)
+);
+CREATE TABLE public.sales (
+  id_sales integer NOT NULL DEFAULT nextval('sales_id_sales_seq'::regclass),
+  nama_sales character varying NOT NULL,
+  nomor_telepon character varying,
+  status_aktif boolean DEFAULT true,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT sales_pkey PRIMARY KEY (id_sales)
+);
+CREATE TABLE public.setoran (
+  id_setoran integer NOT NULL DEFAULT nextval('setoran_id_setoran_seq'::regclass),
+  total_setoran numeric NOT NULL CHECK (total_setoran >= 0::numeric),
+  penerima_setoran character varying NOT NULL,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT setoran_pkey PRIMARY KEY (id_setoran)
+);
+CREATE TABLE public.system_logs (
+  id integer NOT NULL DEFAULT nextval('system_logs_id_seq'::regclass),
+  log_type character varying NOT NULL,
+  message text NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT system_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.toko (
+  id_toko integer NOT NULL DEFAULT nextval('toko_id_toko_seq'::regclass),
+  id_sales integer NOT NULL,
+  nama_toko character varying NOT NULL,
+  kecamatan character varying,
+  kabupaten character varying,
+  link_gmaps text,
+  status_toko boolean DEFAULT true,
+  dibuat_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  diperbarui_pada timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  no_telepon character varying,
+  CONSTRAINT toko_pkey PRIMARY KEY (id_toko),
+  CONSTRAINT toko_id_sales_fkey FOREIGN KEY (id_sales) REFERENCES public.sales(id_sales)
+);
+CREATE TABLE public.v_setoran_dashboard_backup_data (
+  id_setoran integer,
+  waktu_setoran timestamp without time zone,
+  tanggal_setoran date,
+  total_setoran numeric,
+  penerima_setoran character varying,
+  pembayaran_cash_hari_ini numeric,
+  pembayaran_transfer_hari_ini integer,
+  total_pembayaran_hari_ini numeric,
+  selisih_cash_setoran numeric,
+  status_setoran text,
+  event_type text,
+  description text,
+  transaction_category text,
+  nama_toko character varying,
+  kecamatan character varying,
+  kabupaten character varying,
+  cash_balance_kumulatif numeric,
+  jumlah_transaksi_cash integer,
+  jumlah_transaksi_transfer integer,
+  status_arus_kas text
+);
+CREATE TABLE public.v_setoran_dashboard_backup_safe (
+  id_setoran integer,
+  waktu_setoran timestamp without time zone,
+  tanggal_setoran date,
+  total_setoran numeric,
+  penerima_setoran character varying,
+  pembayaran_cash_hari_ini numeric,
+  pembayaran_transfer_hari_ini integer,
+  total_pembayaran_hari_ini numeric,
+  selisih_cash_setoran numeric,
+  status_setoran text,
+  event_type text,
+  description text,
+  transaction_category text,
+  nama_toko character varying,
+  kecamatan character varying,
+  kabupaten character varying,
+  cash_balance_kumulatif numeric,
+  jumlah_transaksi_cash integer,
+  jumlah_transaksi_transfer integer,
+  status_arus_kas text
+);
