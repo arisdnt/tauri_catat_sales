@@ -296,10 +296,14 @@ export default function SetoranDetailPage({ params }: { params: Promise<{ id: st
                 {setoran.related_payments && setoran.related_payments.length > 0 ? (
                   <div className="space-y-3">
                     {setoran.related_payments.map((payment: any) => (
-                      <div 
-                        key={payment.id_penagihan} 
+                      <div
+                        key={payment.id_penagihan}
                         className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200 group"
-                        onClick={() => router.push(`/dashboard/penagihan/${payment.id_penagihan}`)}
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/penagihan?penagihanId=${payment.id_penagihan}`,
+                          )
+                        }
                       >
                         <div className={`p-2 rounded-full ${
                           payment.metode_pembayaran === 'Cash' 

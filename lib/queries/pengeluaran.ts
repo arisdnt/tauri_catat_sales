@@ -37,9 +37,41 @@ export const pengeluaranKeys = {
   all: ['pengeluaran'] as const,
   lists: () => [...pengeluaranKeys.all, 'list'] as const,
   list: (params: PengeluaranParams) => [...pengeluaranKeys.lists(), params] as const,
+  detail: (id: number) => [...pengeluaranKeys.all, 'detail', id] as const,
   stats: () => [...pengeluaranKeys.all, 'stats'] as const,
   totalByDate: (date: string) => [...pengeluaranKeys.stats(), 'total-by-date', date] as const,
   totalByRange: (dateRange: string) => [...pengeluaranKeys.stats(), 'total-by-range', dateRange] as const,
+}
+
+const PENGELUARAN_BUCKET = 'bukti-pengeluaran'
+
+function extractStoragePath(url?: string | null) {
+  if (!url) return null
+  const marker = `${PENGELUARAN_BUCKET}/`
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  const raw = url.substring(idx + marker.length)
+  return raw.split('?')[0]
+}
+
+async function deleteStorageFile(url?: string | null) {
+  const path = extractStoragePath(url || undefined)
+  if (!path) return
+  await supabase.storage.from(PENGELUARAN_BUCKET).remove([path])
+}
+
+async function uploadPengeluaranBukti(file: File) {
+  const ext = file.name.split('.').pop()
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || 'jpg'}`
+  const filePath = `pengeluaran/${fileName}`
+  const { error } = await supabase.storage
+    .from(PENGELUARAN_BUCKET)
+    .upload(filePath, file)
+  if (error) throw new Error(error.message)
+  const { data } = supabase.storage
+    .from(PENGELUARAN_BUCKET)
+    .getPublicUrl(filePath)
+  return data.publicUrl
 }
 
 // Fetch pengeluaran list - Direct Supabase query
@@ -180,6 +212,79 @@ export const useDeletePengeluaran = () => {
     onSuccess: () => {
       // Invalidate and refetch pengeluaran queries
       queryClient.invalidateQueries({ queryKey: pengeluaranKeys.lists() })
+    },
+  })
+}
+
+export const usePengeluaranDetailQuery = (
+  id?: number,
+  options?: { enabled?: boolean },
+) => {
+  return useQuery({
+    queryKey: id ? pengeluaranKeys.detail(id) : ['pengeluaran', 'detail', null],
+    queryFn: async (): Promise<PengeluaranOperasional> => {
+      if (!id) throw new Error('ID pengeluaran tidak valid')
+      const { data, error } = await supabase
+        .from('pengeluaran_operasional')
+        .select('*')
+        .eq('id_pengeluaran', id)
+        .single()
+
+      if (error) throw new Error(error.message)
+      return data as PengeluaranOperasional
+    },
+    enabled: Boolean(id) && (options?.enabled ?? true),
+  })
+}
+
+export const useUpdatePengeluaranMutation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      id: number
+      jumlah: number
+      keterangan: string
+      tanggal_pengeluaran: string
+      newFile?: File | null
+      removeExisting?: boolean
+      existingUrl?: string | null
+    }) => {
+      const { id, jumlah, keterangan, tanggal_pengeluaran, newFile, removeExisting, existingUrl } = params
+      let buktiUrl = existingUrl || null
+
+      if (newFile) {
+        if (buktiUrl) {
+          await deleteStorageFile(buktiUrl)
+        }
+        buktiUrl = await uploadPengeluaranBukti(newFile)
+      } else if (removeExisting && buktiUrl) {
+        await deleteStorageFile(buktiUrl)
+        buktiUrl = null
+      }
+
+      const payload: Partial<PengeluaranOperasional> = {
+        jumlah,
+        keterangan,
+        tanggal_pengeluaran,
+      }
+
+      if (newFile || removeExisting) {
+        payload.url_bukti_foto = buktiUrl
+      }
+
+      const { data, error } = await supabase
+        .from('pengeluaran_operasional')
+        .update(payload)
+        .eq('id_pengeluaran', id)
+        .select()
+        .single()
+
+      if (error) throw new Error(error.message)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: pengeluaranKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: pengeluaranKeys.all })
     },
   })
 }

@@ -9,7 +9,10 @@ import {
   MapPin,
   PackageOpen,
   Search,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Save,
+  X
 } from 'lucide-react'
 
 import { useToast } from '@/components/ui/use-toast'
@@ -26,10 +29,13 @@ import {
 import { useNavigation } from '@/lib/hooks/use-navigation'
 
 import { useDashboardPengirimanQuery } from '@/lib/queries'
+import { usePengirimanDetailQuery } from '@/lib/queries/pengiriman'
 import { useDeletePengirimanMutation } from '@/lib/queries/pengiriman'
 import { exportShipmentData } from '@/lib/excel-export'
 import { useFilterOptions } from '@/lib/db/hooks'
 import { INDONESIA_TIMEZONE, formatCurrency } from '@/lib/utils'
+import { ModalBox } from '@/components/ui/modal-box'
+import { PengirimanEditForm } from './[id]/edit/pengiriman-edit-form'
 
 // Helper functions
 function formatNumber(num: number): string {
@@ -169,13 +175,68 @@ export default function ShippingPage() {
     }
   }, [deleteShipment, toast, refetch])
 
+  const computeDetailSummary = useCallback((item: any) => {
+    const detailString = (item.detail_pengiriman ?? item.detail_produk ?? '').trim()
+    if (!detailString || /tidak ada detail/i.test(detailString)) {
+      return {
+        totalQty: (item.total_quantity ?? item.total_quantity_kirim ?? 0) as number,
+        jenisProduk: (item.jumlah_jenis_produk ?? 0) as number,
+        items: [] as Array<{ nama_produk: string; jumlah_kirim: number }>,
+        sales: item.nama_sales,
+      }
+    }
+
+    const parts = detailString
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean)
+
+    const items = parts.map(part => {
+      const match = part.match(/^(.+?)\s*\[(\d+)\]$/)
+      if (!match) {
+        return { nama_produk: part, jumlah_kirim: 0 }
+      }
+      return {
+        nama_produk: match[1].trim(),
+        jumlah_kirim: parseInt(match[2], 10) || 0
+      }
+    }).filter(p => p.nama_produk && !/tidak ada detail/i.test(p.nama_produk))
+
+    const totalFromItems = items.reduce((sum, p) => sum + (p.jumlah_kirim || 0), 0)
+    const totalQty = (item.total_quantity ?? item.total_quantity_kirim ?? totalFromItems) as number
+    const jenisProduk = (item.jumlah_jenis_produk ?? items.length) as number
+
+    return {
+      totalQty,
+      jenisProduk,
+      items,
+      sales: item.nama_sales,
+    }
+  }, [])
+
+  const [selectedPengiriman, setSelectedPengiriman] = useState<any | null>(null)
+  const [selectedDetailInfo, setSelectedDetailInfo] = useState<ReturnType<typeof computeDetailSummary> | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
+  const detailPengirimanQuery = usePengirimanDetailQuery(selectedPengiriman?.id_pengiriman ?? 0)
+  const detailPengirimanData = (detailPengirimanQuery.data as { data: any })?.data
+  const modalEditFormId = selectedPengiriman
+    ? `pengiriman-edit-form-${selectedPengiriman.id_pengiriman}`
+    : undefined
+
   const handleView = useCallback((pengiriman: any) => {
-    navigate(`/dashboard/pengiriman/${pengiriman.id_pengiriman}`)
-  }, [navigate])
+    setSelectedPengiriman(pengiriman)
+    setSelectedDetailInfo(computeDetailSummary(pengiriman))
+    setDetailModalOpen(true)
+  }, [])
 
   const handleEdit = useCallback((pengiriman: any) => {
-    navigate(`/dashboard/pengiriman/${pengiriman.id_pengiriman}/edit`)
-  }, [navigate])
+    setSelectedPengiriman(pengiriman)
+    setSelectedDetailInfo(computeDetailSummary(pengiriman))
+    setEditModalOpen(true)
+  }, [])
 
   const handleExport = useCallback(() => {
     if (!data) return
@@ -218,42 +279,6 @@ export default function ShippingPage() {
   }, [filterOptions, filters.kabupaten])
 
   // Get detail pengiriman info from dashboard view strings
-  const getDetailPengiriman = (item: any) => {
-    const detailString = (item.detail_pengiriman ?? item.detail_produk ?? '').trim()
-    if (!detailString || /tidak ada detail/i.test(detailString)) {
-      return {
-        totalQty: (item.total_quantity ?? item.total_quantity_kirim ?? 0) as number,
-        jenisProduk: (item.jumlah_jenis_produk ?? 0) as number,
-        items: [] as Array<{ nama_produk: string; jumlah_kirim: number }>,
-      }
-    }
-
-    const parts = detailString
-      .split(',')
-      .map(part => part.trim())
-      .filter(Boolean)
-
-    const items = parts.map(part => {
-      const match = part.match(/^(.+?)\s*\[(\d+)\]$/)
-      if (!match) {
-        return { nama_produk: part, jumlah_kirim: 0 }
-      }
-      return {
-        nama_produk: match[1].trim(),
-        jumlah_kirim: parseInt(match[2], 10) || 0
-      }
-    }).filter(p => p.nama_produk && !/tidak ada detail/i.test(p.nama_produk))
-
-    const totalFromItems = items.reduce((sum, p) => sum + (p.jumlah_kirim || 0), 0)
-    const totalQty = (item.total_quantity ?? item.total_quantity_kirim ?? totalFromItems) as number
-    const jenisProduk = (item.jumlah_jenis_produk ?? items.length) as number
-
-    return {
-      totalQty,
-      jenisProduk,
-      items,
-    }
-  }
 
   return (
     <TooltipProvider>
@@ -417,7 +442,7 @@ export default function ShippingPage() {
                   const item = data[virtualRow.index]
                   const tanggalDisplay = item.tanggal_kirim || item.tanggal_input
                   const dateInfo = tanggalDisplay ? formatDateWithDay(tanggalDisplay) : { date: '-', day: '' }
-                  const detailInfo = getDetailPengiriman(item)
+                  const detailInfo = computeDetailSummary(item)
 
                   return (
                     <div
@@ -572,6 +597,291 @@ export default function ShippingPage() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <ModalBox
+        open={detailModalOpen && !!selectedPengiriman}
+        onOpenChange={(open) => {
+      setDetailModalOpen(open)
+      if (!open) {
+        setSelectedPengiriman(null)
+        setSelectedDetailInfo(null)
+      }
+    }}
+        mode="detail"
+        title={
+          selectedPengiriman
+            ? `Detail Pengiriman #${selectedPengiriman.id_pengiriman}`
+            : 'Detail Pengiriman'
+        }
+        description={
+          selectedPengiriman
+            ? `${selectedPengiriman.nama_toko} • ${selectedPengiriman.kecamatan}, ${selectedPengiriman.kabupaten}`
+            : undefined
+        }
+      >
+        {selectedPengiriman && (() => {
+          const detail = detailPengirimanQuery.isSuccess
+            ? detailPengirimanData
+            : undefined
+          const summary = detail || selectedPengiriman
+          const fallbackItems =
+            selectedDetailInfo?.items?.map((item, index) => ({
+              id_detail_kirim: `fallback-${index}`,
+              jumlah_kirim: item.jumlah_kirim,
+              produk: {
+                nama_produk: item.nama_produk,
+                harga_satuan: undefined,
+              },
+              _fallback: true,
+            })) || []
+          const detailItems = detail?.detail_pengiriman || fallbackItems
+          const totalQty = detailItems.length
+            ? detailItems.reduce(
+                (sum: number, item: any) => sum + (item.jumlah_kirim || 0),
+                0,
+              )
+            : summary?.total_quantity_kirim ||
+              summary?.total_quantity ||
+              0
+          const totalValue = detailItems.length
+            ? detailItems.reduce(
+                (sum: number, item: any) =>
+                  sum +
+                  (item.jumlah_kirim || 0) *
+                    (item.produk?.harga_satuan || 0),
+                0,
+              )
+            : summary?.total_nilai_kirim || 0
+
+          return (
+            <div className="space-y-4 text-sm">
+              {detailPengirimanQuery.error && (
+                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                  Detail lengkap belum tersedia. Menampilkan data ringkas.
+                </div>
+              )}
+              <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="border border-gray-200 bg-gray-50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">
+                          Shipment
+                        </p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          #{summary?.id_pengiriman}
+                        </p>
+                        {summary?.tanggal_kirim && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatDate(summary.tanggal_kirim)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border border-gray-200 bg-white p-3 shadow-sm">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">
+                          Sales Pengirim
+                        </p>
+        <p className="text-sm font-semibold text-gray-900">
+          {summary?.toko?.sales?.nama_sales ||
+            summary?.nama_sales ||
+            selectedDetailInfo?.sales ||
+            '-'}
+                        </p>
+                        {summary?.toko?.sales?.nomor_telepon && (
+                          <p className="text-xs text-gray-500">
+                            {summary.toko.sales.nomor_telepon}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-gray-100 bg-gradient-to-tr from-white to-blue-50 p-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Toko</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {summary?.nama_toko || summary?.toko?.nama_toko}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {summary?.kecamatan || summary?.toko?.kecamatan}, {summary?.kabupaten || summary?.toko?.kabupaten}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Total Nilai</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {formatCurrency(
+                            totalValue ||
+                              summary?.total_nilai_kirim ||
+                              0
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {formatNumber(
+                            totalQty ||
+                              summary?.total_quantity_kirim ||
+                              summary?.total_quantity ||
+                              0
+                          )}{" "}
+                          pcs
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border border-gray-100 bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-gray-500">
+                            Detail Produk
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {formatNumber(totalQty)} pcs dikirim
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {detailItems.length} item
+                        </Badge>
+                      </div>
+                      {detailPengirimanQuery.isLoading && !detail?.detail_pengiriman ? (
+                        <div className="flex items-center justify-center py-6 text-gray-500">
+                          Memuat detail pengiriman...
+                        </div>
+                      ) : detailItems.length > 0 ? (
+                        <div className="max-h-64 overflow-auto border border-gray-100">
+                          <table className="min-w-full divide-y divide-gray-100 text-xs">
+                            <thead className="bg-gray-50 text-gray-500">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium">
+                                  Produk
+                                </th>
+                                <th className="px-3 py-2 text-center font-medium">
+                                  Harga
+                                </th>
+                                <th className="px-3 py-2 text-center font-medium">
+                                  Jumlah
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                  Nilai
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {detailItems.map((detail: any, idx: number) => (
+                                <tr key={detail.id_detail_kirim ?? idx}>
+                                  <td className="px-3 py-2">
+                                    <p className="font-semibold text-gray-900">
+                                      {detail.produk?.nama_produk || 'Produk'}
+                                    </p>
+                                  </td>
+                                  <td className="px-3 py-2 text-center text-gray-700">
+                                    {detail.produk?.harga_satuan
+                                      ? formatCurrency(detail.produk.harga_satuan)
+                                      : "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center font-semibold text-blue-600">
+                                    {formatNumber(detail.jumlah_kirim || 0)} pcs
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                                    {detail.produk?.harga_satuan
+                                      ? formatCurrency(
+                                          (detail.jumlah_kirim || 0) *
+                                            (detail.produk?.harga_satuan || 0),
+                                        )
+                                      : "-"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          Detail produk belum tersedia untuk data ini.
+                        </p>
+                      )}
+                    </div>
+              </div>
+            </div>
+          )
+        })()}
+      </ModalBox>
+
+      {/* Edit Modal */}
+      <ModalBox
+        open={editModalOpen && !!selectedPengiriman}
+        onOpenChange={(open) => {
+          setEditModalOpen(open)
+          if (!open) {
+            setSelectedPengiriman(null)
+            setEditSubmitting(false)
+            setSelectedDetailInfo(null)
+          }
+        }}
+        mode="edit"
+        title={
+          selectedPengiriman
+            ? `Edit Pengiriman #${selectedPengiriman.id_pengiriman}`
+            : 'Edit Pengiriman'
+        }
+        description={
+          selectedPengiriman
+            ? `${selectedPengiriman.nama_toko} • ${selectedPengiriman.kecamatan}, ${selectedPengiriman.kabupaten}`
+            : undefined
+        }
+        footer={
+          selectedPengiriman ? (
+            <div className="flex w-full items-center justify-end gap-3">
+              <Button
+                form={modalEditFormId}
+                type="submit"
+                disabled={editSubmitting}
+                className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {editSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Simpan Perubahan
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                onClick={() => {
+                  setEditModalOpen(false)
+                  setSelectedPengiriman(null)
+                  setEditSubmitting(false)
+                }}
+              >
+                <X className="h-4 w-4" />
+                Tutup
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        {selectedPengiriman && (
+          <PengirimanEditForm
+            id={selectedPengiriman.id_pengiriman}
+            variant="modal"
+            formId={modalEditFormId}
+            onSubmittingChange={setEditSubmitting}
+            onSuccess={() => {
+              setEditModalOpen(false)
+              setSelectedPengiriman(null)
+              setEditSubmitting(false)
+              refetch()
+            }}
+            onCancel={() => {
+              setEditModalOpen(false)
+              setSelectedPengiriman(null)
+              setEditSubmitting(false)
+            }}
+          />
+        )}
+      </ModalBox>
     </TooltipProvider>
   )
 }

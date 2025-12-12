@@ -10,7 +10,9 @@ import {
   Search,
   RefreshCw,
   Plus,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2,
+  X
 } from 'lucide-react'
 import { INDONESIA_TIMEZONE, formatCurrency } from '@/lib/utils'
 
@@ -25,10 +27,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useNavigation } from '@/lib/hooks/use-navigation'
 
 import { useDashboardPengeluaranQuery } from '@/lib/queries'
-import { useDeletePengeluaran } from '@/lib/queries/pengeluaran'
+import {
+  useDeletePengeluaran,
+  usePengeluaranDetailQuery,
+} from '@/lib/queries/pengeluaran'
+import { PengeluaranForm } from './components/pengeluaran-form'
+import { ModalBox } from '@/components/ui/modal-box'
+import { PengeluaranEditForm } from './components/pengeluaran-edit-form'
 
 // Helper function to format numbers
 function formatNumber(num: number): string {
@@ -60,20 +67,20 @@ interface PengeluaranFilters {
 }
 
 // Column widths as percentages (total = 100%)
+// Evenly distributed: 100% / 6 columns = ~16.67% each
 const COLUMN_WIDTHS = {
-  noPengeluaran: '12%',
-  tanggal: '16%',
-  keterangan: '45%',
-  jumlah: '15%',
-  bukti: '5%',
-  aksi: '7%'
+  noPengeluaran: '16.67%',
+  tanggal: '16.67%',
+  keterangan: '16.67%',
+  jumlah: '16.67%',
+  bukti: '16.67%',
+  aksi: '16.65%'  // Slightly smaller to account for rounding (total = 100%)
 }
 
 const ROW_HEIGHT = 56
 const HEADER_HEIGHT = 36
 
 export default function PengeluaranPage() {
-  const { navigate } = useNavigation()
   const { toast } = useToast()
   const deleteMutation = useDeletePengeluaran()
   const parentRef = useRef<HTMLDivElement>(null)
@@ -87,6 +94,14 @@ export default function PengeluaranPage() {
   // Preview state for bukti foto
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
+  // Create modal state
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedPengeluaran, setSelectedPengeluaran] = useState<any | null>(null)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const modalFormId = 'pengeluaran-edit-modal-form'
+
   // Use dashboard query with fixed page+limit (virtualized list)
   const { data: dashboardResult, isLoading, error, refetch } = useDashboardPengeluaranQuery({
     page: 1,
@@ -96,6 +111,15 @@ export default function PengeluaranPage() {
   })
 
   const data = dashboardResult?.data?.data || []
+  const selectedId = selectedPengeluaran?.id_pengeluaran
+  const {
+    data: detailData,
+    isLoading: detailLoading,
+    error: detailError,
+  } = usePengeluaranDetailQuery(selectedId, {
+    enabled: Boolean(selectedId && (detailModalOpen || editModalOpen)),
+  })
+  const detailPengeluaran = detailData || selectedPengeluaran
 
   const metadata = useMemo(() => {
     const total = dashboardResult?.data?.pagination?.total ?? data.length
@@ -131,6 +155,9 @@ export default function PengeluaranPage() {
             title: "Berhasil",
             description: `Pengeluaran #${pengeluaran.id_pengeluaran} berhasil dihapus`,
           })
+          setDetailModalOpen(false)
+          setEditModalOpen(false)
+          setSelectedPengeluaran(null)
           refetch()
         },
         onError: (err: any) => {
@@ -145,16 +172,18 @@ export default function PengeluaranPage() {
   }, [deleteMutation, toast, refetch])
 
   const handleView = useCallback((pengeluaran: any) => {
-    navigate(`/dashboard/pengeluaran/${pengeluaran.id_pengeluaran}`)
-  }, [navigate])
+    setSelectedPengeluaran(pengeluaran)
+    setDetailModalOpen(true)
+  }, [])
 
   const handleEdit = useCallback((pengeluaran: any) => {
-    navigate(`/dashboard/pengeluaran/edit/${pengeluaran.id_pengeluaran}`)
-  }, [navigate])
+    setSelectedPengeluaran(pengeluaran)
+    setEditModalOpen(true)
+  }, [])
 
   const handleAdd = useCallback(() => {
-    navigate('/dashboard/pengeluaran/create')
-  }, [navigate])
+    setCreateModalOpen(true)
+  }, [])
 
   const handleExport = useCallback(() => {
     if (!data) return
@@ -409,6 +438,213 @@ export default function PengeluaranPage() {
             </div>
           </div>
         )}
+
+        {/* Detail Modal */}
+        <ModalBox
+          open={detailModalOpen && !!selectedPengeluaran}
+          onOpenChange={(open) => {
+            setDetailModalOpen(open)
+            if (!open) {
+              setSelectedPengeluaran(null)
+            }
+          }}
+          mode="detail"
+          title={
+            selectedPengeluaran
+              ? `Detail Pengeluaran #${selectedPengeluaran.id_pengeluaran}`
+              : 'Detail Pengeluaran'
+          }
+          description={
+            detailPengeluaran?.tanggal_pengeluaran
+              ? formatDate(detailPengeluaran.tanggal_pengeluaran)
+              : undefined
+          }
+          className="max-w-3xl"
+        >
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-20 text-gray-500">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Memuat detail pengeluaran...
+            </div>
+          ) : detailError ? (
+            <p className="text-sm text-red-600">
+              Gagal memuat detail pengeluaran.
+            </p>
+          ) : detailPengeluaran ? (
+            <div className="space-y-5 text-sm">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded border border-gray-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Pengeluaran
+                  </p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    #{detailPengeluaran.id_pengeluaran}
+                  </p>
+                  {detailPengeluaran.tanggal_pengeluaran && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatDate(detailPengeluaran.tanggal_pengeluaran)}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded border border-gray-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Jumlah
+                  </p>
+                  <p className="text-lg font-semibold text-red-600">
+                    {formatCurrency(detailPengeluaran.jumlah || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Dibuat:{' '}
+                    {detailPengeluaran.dibuat_pada
+                      ? new Date(
+                          detailPengeluaran.dibuat_pada,
+                        ).toLocaleString('id-ID')
+                      : '-'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Diperbarui:{' '}
+                    {detailPengeluaran.diperbarui_pada
+                      ? new Date(
+                          detailPengeluaran.diperbarui_pada,
+                        ).toLocaleString('id-ID')
+                      : '-'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">
+                  Keterangan
+                </p>
+                <p className="mt-2 text-sm text-gray-900">
+                  {detailPengeluaran.keterangan || '-'}
+                </p>
+              </div>
+
+              {detailPengeluaran.url_bukti_foto ? (
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    Bukti Foto
+                  </p>
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <img
+                      src={detailPengeluaran.url_bukti_foto}
+                      alt="Bukti pengeluaran"
+                      className="w-full max-h-72 rounded object-contain"
+                    />
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            detailPengeluaran.url_bukti_foto as string,
+                            '_blank',
+                          )
+                        }
+                      >
+                        Lihat Bukti
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500">
+                  Tidak ada bukti foto yang tersimpan.
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              Data pengeluaran tidak tersedia.
+            </p>
+          )}
+        </ModalBox>
+
+        {/* Edit Modal */}
+        <ModalBox
+          open={editModalOpen && !!selectedPengeluaran}
+          onOpenChange={(open) => {
+            setEditModalOpen(open)
+            if (!open) {
+              setSelectedPengeluaran(null)
+              setEditSubmitting(false)
+            }
+          }}
+          mode="edit"
+          title={
+            selectedPengeluaran
+              ? `Edit Pengeluaran #${selectedPengeluaran.id_pengeluaran}`
+              : 'Edit Pengeluaran'
+          }
+          description={
+            detailPengeluaran?.tanggal_pengeluaran
+              ? formatDate(detailPengeluaran.tanggal_pengeluaran)
+              : undefined
+          }
+          footer={
+            selectedPengeluaran ? (
+              <div className="flex w-full items-center justify-end gap-3">
+                <Button
+                  form={modalFormId}
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {editSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      Simpan Perubahan
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                  onClick={() => {
+                    setEditModalOpen(false)
+                    setSelectedPengeluaran(null)
+                    setEditSubmitting(false)
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Tutup
+                </Button>
+              </div>
+            ) : undefined
+          }
+          className="max-w-3xl"
+        >
+          {selectedPengeluaran && (
+            <PengeluaranEditForm
+              id={selectedPengeluaran.id_pengeluaran}
+              formId={modalFormId}
+              initialData={detailPengeluaran || selectedPengeluaran}
+              onSubmittingChange={setEditSubmitting}
+              onSuccess={() => {
+                setEditModalOpen(false)
+                setSelectedPengeluaran(null)
+                setEditSubmitting(false)
+                refetch()
+              }}
+            />
+          )}
+        </ModalBox>
+
+        {/* Create Modal */}
+        <PengeluaranForm
+          open={createModalOpen}
+          onOpenChange={(open) => {
+            setCreateModalOpen(open)
+            if (!open) {
+              refetch() // Refresh data setelah create
+            }
+          }}
+        />
       </div>
     </TooltipProvider>
   )

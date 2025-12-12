@@ -134,7 +134,9 @@ export default function PenagihanDetailPage() {
           <div></div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => navigate(`/dashboard/penagihan/${id}/edit`)}
+              onClick={() =>
+                navigate(`/dashboard/penagihan?penagihanId=${id}&action=edit`)
+              }
               className="flex items-center gap-2"
             >
               <Edit className="w-4 h-4" />

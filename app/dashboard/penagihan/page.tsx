@@ -1,6 +1,13 @@
-'use client'
+"use client"
 
-import React, { useMemo, useCallback, useState, useRef } from 'react'
+import React, {
+  useMemo,
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+} from "react"
+import { useSearchParams } from "next/navigation"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Eye,
@@ -10,27 +17,39 @@ import {
   Package,
   Search,
   ExternalLink,
-  Loader2
-} from 'lucide-react'
-import { INDONESIA_TIMEZONE } from '@/lib/utils'
+  Loader2,
+  Save,
+  X,
+} from "lucide-react"
+import { INDONESIA_TIMEZONE } from "@/lib/utils"
 
-import { useToast } from '@/components/ui/use-toast'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from "@/components/ui/use-toast"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { useNavigation } from '@/lib/hooks/use-navigation'
+} from "@/components/ui/tooltip"
+import { useNavigation } from "@/lib/hooks/use-navigation"
 
-import { useFilterOptions } from '@/lib/db/hooks'
-import { useDashboardPenagihanQuery } from '@/lib/queries'
-import { useDeletePenagihanMutation } from '@/lib/queries/penagihan'
-import { exportBillingData } from '@/lib/excel-export'
+import { useFilterOptions } from "@/lib/db/hooks"
+import { useDashboardPenagihanQuery } from "@/lib/queries"
+import { usePenagihanDetailQuery } from "@/lib/queries/penagihan"
+import { useDeletePenagihanMutation } from "@/lib/queries/penagihan"
+import { exportBillingData } from "@/lib/excel-export"
+import { ModalBox } from "@/components/ui/modal-box"
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal"
+import { PenagihanEditForm } from "./[id]/edit/penagihan-edit-form"
 
 // Helper functions
 function formatNumber(num: number): string {
@@ -88,11 +107,31 @@ const COLUMN_WIDTHS = {
 const ROW_HEIGHT = 56
 const HEADER_HEIGHT = 36
 
+type PenagihanRow = any
+
 export default function PenagihanPage() {
   const { navigate } = useNavigation()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const deletePenagihanMutation = useDeletePenagihanMutation()
   const parentRef = useRef<HTMLDivElement>(null)
+
+  // Detail & edit modals
+  const [selectedPenagihan, setSelectedPenagihan] = useState<PenagihanRow | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const detailPenagihanQuery = usePenagihanDetailQuery(selectedPenagihan?.id_penagihan ?? 0)
+  const detailPenagihanData = (detailPenagihanQuery.data as { data: any })?.data
+  const modalEditFormId = selectedPenagihan
+    ? `penagihan-edit-form-${selectedPenagihan.id_penagihan}`
+    : undefined
+
+  // Delete modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<PenagihanRow | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [hasHandledQueryParams, setHasHandledQueryParams] = useState(false)
 
   // Filters - default to 'current_month' (Bulan Ini)
   const [filters, setFilters] = useState<PenagihanFilters>({
@@ -148,27 +187,47 @@ export default function PenagihanPage() {
     })
   }, [])
 
-  const handleDelete = useCallback((penagihan: any) => {
-    if (window.confirm(`Hapus penagihan #${penagihan.id_penagihan}?`)) {
-      deletePenagihanMutation.mutate(penagihan.id_penagihan, {
-        onSuccess: () => {
-          toast({ title: "Berhasil", description: `Penagihan #${penagihan.id_penagihan} dihapus` })
-          refetch()
-        },
-        onError: (error: any) => {
-          toast({ title: "Error", description: error.message, variant: "destructive" })
-        }
-      })
-    }
-  }, [deletePenagihanMutation, toast, refetch])
+  const handleOpenDetailModal = useCallback((penagihan: PenagihanRow) => {
+    setSelectedPenagihan(penagihan)
+    setDetailModalOpen(true)
+  }, [])
 
-  const handleView = useCallback((penagihan: any) => {
-    navigate(`/dashboard/penagihan/${penagihan.id_penagihan}`)
-  }, [navigate])
+  const handleOpenEditModal = useCallback((penagihan: PenagihanRow) => {
+    setSelectedPenagihan(penagihan)
+    setEditModalOpen(true)
+  }, [])
 
-  const handleEdit = useCallback((penagihan: any) => {
-    navigate(`/dashboard/penagihan/${penagihan.id_penagihan}/edit`)
-  }, [navigate])
+  const handleOpenDeleteModal = useCallback((penagihan: PenagihanRow) => {
+    setDeleteTarget(penagihan)
+    setDeleteModalOpen(true)
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return
+
+    setDeleteLoading(true)
+    deletePenagihanMutation.mutate(deleteTarget.id_penagihan, {
+      onSuccess: () => {
+        toast({
+          title: "Berhasil",
+          description: `Penagihan #${deleteTarget.id_penagihan} dihapus`,
+        })
+        setDeleteModalOpen(false)
+        setDeleteTarget(null)
+        refetch()
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        })
+      },
+      onSettled: () => {
+        setDeleteLoading(false)
+      },
+    })
+  }, [deleteTarget, deletePenagihanMutation, toast, refetch])
 
   const handleExport = useCallback(() => {
     if (!data) return
@@ -238,6 +297,43 @@ export default function PenagihanPage() {
       itemsKembali: kembaliList,
     }
   }
+
+  // Auto buka modal detail/edit jika datang dengan query param (tautan eksternal)
+  useEffect(() => {
+    if (hasHandledQueryParams) return
+
+    const idParam = searchParams.get("penagihanId")
+    if (!idParam) {
+      setHasHandledQueryParams(true)
+      return
+    }
+
+    const id = parseInt(idParam, 10)
+    if (Number.isNaN(id) || !data || data.length === 0) {
+      if (data && data.length > 0) {
+        // Data sudah ada tapi ID tidak valid / tidak ditemukan
+        setHasHandledQueryParams(true)
+      }
+      return
+    }
+
+    const found = data.find((item: any) => item.id_penagihan === id)
+    if (!found) {
+      setHasHandledQueryParams(true)
+      return
+    }
+
+    const action = searchParams.get("action")
+
+    setSelectedPenagihan(found)
+    if (action === "edit") {
+      setEditModalOpen(true)
+    } else {
+      setDetailModalOpen(true)
+    }
+
+    setHasHandledQueryParams(true)
+  }, [searchParams, data, hasHandledQueryParams])
 
   return (
     <TooltipProvider>
@@ -504,7 +600,10 @@ export default function PenagihanPage() {
                       <div style={{ width: COLUMN_WIDTHS.aksi }} className="px-2 flex items-center gap-0.5">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleView(item)} className="p-1 hover:bg-blue-100 text-blue-600">
+                            <button
+                              onClick={() => handleOpenDetailModal(item)}
+                              className="p-1 hover:bg-blue-100 text-blue-600"
+                            >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                           </TooltipTrigger>
@@ -512,7 +611,10 @@ export default function PenagihanPage() {
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleEdit(item)} className="p-1 hover:bg-green-100 text-green-600">
+                            <button
+                              onClick={() => handleOpenEditModal(item)}
+                              className="p-1 hover:bg-green-100 text-green-600"
+                            >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
                           </TooltipTrigger>
@@ -520,7 +622,10 @@ export default function PenagihanPage() {
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={() => handleDelete(item)} className="p-1 hover:bg-red-100 text-red-600">
+                            <button
+                              onClick={() => handleOpenDeleteModal(item)}
+                              className="p-1 hover:bg-red-100 text-red-600"
+                            >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </TooltipTrigger>
@@ -534,6 +639,371 @@ export default function PenagihanPage() {
             )}
           </div>
         </div>
+
+        {/* Detail Modal */}
+        <ModalBox
+          open={detailModalOpen && !!selectedPenagihan}
+          onOpenChange={(open) => {
+            setDetailModalOpen(open)
+            if (!open) {
+              setSelectedPenagihan(null)
+            }
+          }}
+          mode="detail"
+          title={
+            selectedPenagihan
+              ? `Detail Penagihan #${selectedPenagihan.id_penagihan}`
+              : "Detail Penagihan"
+          }
+          description={
+            selectedPenagihan
+              ? `${selectedPenagihan.nama_toko} • ${selectedPenagihan.kecamatan}, ${selectedPenagihan.kabupaten}`
+              : undefined
+          }
+        >
+          {selectedPenagihan && (
+            <div className="space-y-4 text-sm">
+              {detailPenagihanQuery.isLoading ? (
+                <div className="flex items-center justify-center py-6 text-gray-500">
+                  Memuat detail penagihan...
+                </div>
+              ) : (
+                <>
+                  {detailPenagihanQuery.error && (
+                    <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                      Detail lengkap belum tersedia. Menampilkan data ringkas.
+                    </div>
+                  )}
+                  {(() => {
+                    const detail = detailPenagihanData
+                    const summary = detail || selectedPenagihan
+                    const tanggalDisplay =
+                      summary?.tanggal_penagihan ||
+                      summary?.dibuat_pada ||
+                      selectedPenagihan.dibuat_pada
+                    const detailItems = detail?.detail_penagihan || []
+                    const totalTerjual = detailItems.reduce(
+                      (sum: number, item: any) =>
+                        sum + (item.jumlah_terjual || 0),
+                      0,
+                    )
+                    const totalJenis = detailItems.length
+                    const totalKembali = detailItems.reduce(
+                      (sum: number, item: any) =>
+                        sum + (item.jumlah_kembali || 0),
+                      0,
+                    )
+
+                    return (
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="border border-gray-200 bg-gray-50/80 p-3">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Invoice
+                            </p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              #{summary?.id_penagihan}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {tanggalDisplay
+                                ? formatDate(tanggalDisplay)
+                                : "-"}
+                            </p>
+                          </div>
+                          <div className="border border-gray-200 bg-white p-3 shadow-sm">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Metode Pembayaran
+                            </p>
+                            <span
+                              className={`mt-1 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                summary?.metode_pembayaran === "Cash"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-blue-50 text-blue-700"
+                              }`}
+                            >
+                              {summary?.metode_pembayaran}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-gray-100 bg-gradient-to-tr from-white to-blue-50 p-4">
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500">Toko</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {summary?.nama_toko ||
+                                summary?.toko?.nama_toko ||
+                                "-"}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {summary?.kecamatan ||
+                                summary?.toko?.kecamatan ||
+                                "-"}
+                              ,{" "}
+                              {summary?.kabupaten ||
+                                summary?.toko?.kabupaten ||
+                                "-"}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500">
+                              Sales Penagih
+                            </p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {summary?.nama_sales ||
+                                summary?.toko?.sales?.nama_sales ||
+                                "-"}
+                            </p>
+                            {summary?.toko?.sales?.nomor_telepon && (
+                              <p className="text-xs text-gray-500">
+                                {summary.toko.sales.nomor_telepon}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {[
+                            {
+                              label: "Total Pembayaran",
+                              value: formatCurrency(
+                                summary?.total_uang_diterima ||
+                                  detail?.total_uang_diterima ||
+                                  0,
+                              ),
+                              accent: "text-emerald-600",
+                            },
+                            {
+                              label: "PCS Terjual",
+                              value: formatNumber(
+                                totalTerjual ||
+                                  summary?.total_quantity_terjual ||
+                                  0,
+                              ),
+                              accent: "text-slate-900",
+                            },
+                            {
+                              label: "Jenis Produk",
+                              value: formatNumber(
+                                totalJenis ||
+                                  summary?.total_jenis_produk ||
+                                  0,
+                              ),
+                              accent: "text-slate-900",
+                            },
+                          ].map((stat) => (
+                            <div
+                              key={stat.label}
+                              className="border border-gray-100 bg-white p-3 shadow-sm"
+                            >
+                              <p className="text-xs uppercase text-gray-500">
+                                {stat.label}
+                              </p>
+                              <p className={`text-lg font-semibold ${stat.accent}`}>
+                                {stat.value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border border-gray-100 bg-white p-4 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-gray-500">
+                                Ringkasan Produk
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {formatNumber(totalTerjual)} pcs terjual •{" "}
+                                {formatNumber(totalKembali)} pcs kembali
+                              </p>
+                            </div>
+                            <Badge variant="secondary" className="text-xs">
+                              {detailItems.length} item
+                            </Badge>
+                          </div>
+                          {detailItems.length > 0 ? (
+                            <div className="max-h-60 overflow-auto border border-gray-100">
+                              <table className="min-w-full divide-y divide-gray-100 text-xs">
+                                <thead className="bg-gray-50 text-gray-500">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Produk
+                                    </th>
+                                    <th className="px-3 py-2 text-center font-medium">
+                                      Terjual
+                                    </th>
+                                    <th className="px-3 py-2 text-center font-medium">
+                                      Kembali
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {detailItems.map((item: any) => (
+                                    <tr key={item.id_detail_tagih}>
+                                      <td className="px-3 py-2">
+                                        <p className="font-semibold text-gray-900">
+                                          {item.produk?.nama_produk || "Produk"}
+                                        </p>
+                                        <p className="text-gray-500">
+                                          ID: {item.produk?.id_produk || "-"}
+                                        </p>
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-emerald-600">
+                                        {formatNumber(item.jumlah_terjual || 0)}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-amber-600">
+                                        {formatNumber(item.jumlah_kembali || 0)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-500">
+                              Detail produk lengkap belum tersedia untuk data
+                              ini.
+                            </p>
+                          )}
+                        </div>
+
+                        {detail?.potongan_penagihan?.length ? (
+                          <div className="border border-amber-100 bg-amber-50/80 p-4">
+                            <p className="text-xs uppercase text-amber-700 mb-3">
+                              Potongan Penagihan
+                            </p>
+                            <div className="space-y-2">
+                              {detail.potongan_penagihan.map((pot: any) => (
+                                <div
+                                  key={pot.id_potongan}
+                                  className="border border-amber-100 bg-white/70 p-3 text-xs"
+                                >
+                                  <p className="text-sm font-semibold text-amber-700">
+                                    {formatCurrency(pot.jumlah_potongan)}
+                                  </p>
+                                  {pot.alasan && (
+                                    <p className="text-amber-600 mt-1">
+                                      {pot.alasan}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+        </ModalBox>
+
+        {/* Edit Modal - form edit langsung di modal */}
+        <ModalBox
+          open={editModalOpen && !!selectedPenagihan}
+          onOpenChange={(open) => {
+            setEditModalOpen(open)
+            if (!open) {
+              setSelectedPenagihan(null)
+              setEditSubmitting(false)
+            }
+          }}
+          mode="edit"
+          title={
+            selectedPenagihan
+              ? `Edit Penagihan #${selectedPenagihan.id_penagihan}`
+              : "Edit Penagihan"
+          }
+          description={
+            selectedPenagihan
+              ? `${selectedPenagihan.nama_toko} • ${selectedPenagihan.kecamatan}, ${selectedPenagihan.kabupaten}`
+              : undefined
+          }
+          footer={
+            selectedPenagihan ? (
+              <div className="flex w-full items-center justify-end gap-3">
+                <Button
+                  form={modalEditFormId}
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {editSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Simpan Perubahan
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                  onClick={() => {
+                    setEditModalOpen(false)
+                    setSelectedPenagihan(null)
+                    setEditSubmitting(false)
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Tutup
+                </Button>
+              </div>
+            ) : undefined
+          }
+        >
+          {selectedPenagihan && (
+            <PenagihanEditForm
+              id={selectedPenagihan.id_penagihan}
+              variant="modal"
+              formId={modalEditFormId}
+              onSubmittingChange={setEditSubmitting}
+              initialMetodePembayaran={selectedPenagihan.metode_pembayaran}
+              onSuccess={() => {
+                setEditModalOpen(false)
+                setSelectedPenagihan(null)
+                setEditSubmitting(false)
+                refetch()
+              }}
+              onCancel={() => {
+                setEditModalOpen(false)
+                setSelectedPenagihan(null)
+                setEditSubmitting(false)
+              }}
+            />
+          )}
+        </ModalBox>
+
+        {/* Delete Confirm Modal */}
+        <DeleteConfirmModal
+          open={deleteModalOpen && !!deleteTarget}
+          onOpenChange={(open) => {
+            setDeleteModalOpen(open)
+            if (!open) {
+              setDeleteTarget(null)
+            }
+          }}
+          onConfirm={handleConfirmDelete}
+          itemName={
+            deleteTarget
+              ? `Penagihan #${deleteTarget.id_penagihan} - ${deleteTarget.nama_toko}`
+              : undefined
+          }
+          loading={deleteLoading}
+          extraContent={
+            deleteTarget ? (
+              <span className="text-xs text-amber-700">
+                Data penagihan ini akan dihapus dari daftar. Tindakan tidak
+                dapat dibatalkan.
+              </span>
+            ) : null
+          }
+        />
       </div>
     </TooltipProvider>
   )

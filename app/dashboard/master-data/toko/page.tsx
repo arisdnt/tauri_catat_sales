@@ -20,7 +20,10 @@ import {
   DollarSign,
   Warehouse,
   Search,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Save,
+  X
 } from 'lucide-react'
 
 import { useToast } from '@/components/ui/use-toast'
@@ -33,9 +36,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMasterTokoQuery, type MasterToko } from '@/lib/queries/dashboard'
-import { useDeleteTokoMutation } from '@/lib/queries/toko'
+import { useDeleteTokoMutation, useTokoDetailQuery, type Toko } from '@/lib/queries/toko'
 import { exportStoreData } from '@/lib/excel-export'
 import { apiClient } from '@/lib/api-client'
+import { ModalBox } from '@/components/ui/modal-box'
+import { TokoDetailPanel } from './components/toko-detail-panel'
+import { TokoEditForm } from './components/toko-edit-form'
 
 // Status configuration
 const statusConfig = {
@@ -229,6 +235,7 @@ export default function TokoPage() {
   const { data: kabupatenOptions } = useKabupatenOptionsQuery()
   const { data: kecamatanOptions } = useKecamatanOptionsQuery(filters.kabupaten)
   const { data: salesOptions } = useSalesOptionsQuery()
+  const salesOptionList = salesOptions?.data || []
 
   // Query parameters for API - fixed page + large limit for virtualized list
   const queryParams = useMemo(() => {
@@ -261,6 +268,22 @@ export default function TokoPage() {
 
   const rows: MasterToko[] = masterData?.data?.data || []
   const pagination = masterData?.data?.pagination
+
+  const [selectedToko, setSelectedToko] = useState<MasterToko | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const modalFormId = selectedToko
+    ? `toko-edit-form-${selectedToko.id_toko}`
+    : undefined
+
+  const selectedId = selectedToko?.id_toko ?? 0
+  const detailQuery = useTokoDetailQuery(selectedId, {
+    enabled: Boolean(selectedId && (detailModalOpen || editModalOpen)),
+  })
+  const detailRecord = (detailQuery.data as { data: Toko } | undefined)?.data
+  const detailLoading = detailQuery.isLoading
+  const detailError = detailQuery.error
 
   const summary = useMemo(() => {
     const total = pagination?.total ?? rows.length
@@ -311,6 +334,12 @@ export default function TokoPage() {
     if (window.confirm(`Apakah Anda yakin ingin menghapus toko "${toko.nama_toko}"?`)) {
       deleteTokoMutation.mutate(toko.id_toko, {
         onSuccess: () => {
+          if (selectedToko?.id_toko === toko.id_toko) {
+            setSelectedToko(null)
+            setDetailModalOpen(false)
+            setEditModalOpen(false)
+            setEditSubmitting(false)
+          }
           toast({
             title: "Berhasil",
             description: `Toko "${toko.nama_toko}" berhasil dihapus`,
@@ -326,17 +355,19 @@ export default function TokoPage() {
         }
       })
     }
-  }, [deleteTokoMutation, toast, refetch])
+  }, [deleteTokoMutation, toast, refetch, selectedToko])
 
   // Handle view
   const handleView = useCallback((toko: MasterToko) => {
-    navigate(`/dashboard/master-data/toko/${toko.id_toko}`)
-  }, [navigate])
+    setSelectedToko(toko)
+    setDetailModalOpen(true)
+  }, [])
 
   // Handle edit
   const handleEdit = useCallback((toko: MasterToko) => {
-    navigate(`/dashboard/master-data/toko/${toko.id_toko}/edit`)
-  }, [navigate])
+    setSelectedToko(toko)
+    setEditModalOpen(true)
+  }, [])
 
   // Handle export - fetch all data for export
   const handleExport = useCallback(async () => {
@@ -426,7 +457,7 @@ export default function TokoPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Sales</SelectItem>
-                {salesOptions?.data?.map((sales: any) => (
+                {salesOptionList.map((sales: any) => (
                   <SelectItem key={sales.id_sales} value={sales.id_sales.toString()}>
                     {sales.nama_sales}
                   </SelectItem>
@@ -767,6 +798,115 @@ export default function TokoPage() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <ModalBox
+        open={detailModalOpen && !!selectedToko}
+        onOpenChange={(open) => {
+          setDetailModalOpen(open)
+          if (!open && !editModalOpen) {
+            setSelectedToko(null)
+          }
+        }}
+        mode="detail"
+        title={
+          selectedToko
+            ? `Detail Toko #${selectedToko.id_toko}`
+            : 'Detail Toko'
+        }
+        description={selectedToko?.nama_toko}
+        className="max-w-3xl"
+      >
+        {detailLoading ? (
+          <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Memuat detail toko...
+          </div>
+        ) : detailError ? (
+          <p className="text-sm text-red-600">
+            Gagal memuat detail toko.
+          </p>
+        ) : (
+          <TokoDetailPanel toko={selectedToko} detailData={detailRecord} />
+        )}
+      </ModalBox>
+
+      {/* Edit Modal */}
+      <ModalBox
+        open={editModalOpen && !!selectedToko}
+        onOpenChange={(open) => {
+          setEditModalOpen(open)
+          if (!open) {
+            setEditSubmitting(false)
+            if (!detailModalOpen) {
+              setSelectedToko(null)
+            }
+          }
+        }}
+        mode="edit"
+        title={
+          selectedToko
+            ? `Edit Toko #${selectedToko.id_toko}`
+            : 'Edit Toko'
+        }
+        description={selectedToko?.nama_toko}
+        footer={
+          selectedToko ? (
+            <div className="flex w-full items-center justify-end gap-3">
+              <Button
+                form={modalFormId}
+                type="submit"
+                disabled={editSubmitting}
+                className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {editSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Simpan Perubahan
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                onClick={() => {
+                  setEditModalOpen(false)
+                  setEditSubmitting(false)
+                  if (!detailModalOpen) {
+                    setSelectedToko(null)
+                  }
+                }}
+              >
+                <X className="h-4 w-4" />
+                Tutup
+              </Button>
+            </div>
+          ) : undefined
+        }
+        className="max-w-3xl"
+      >
+        {selectedToko && (
+          <TokoEditForm
+            id={selectedToko.id_toko}
+            formId={modalFormId}
+            initialData={{ ...selectedToko, ...detailRecord }}
+            salesOptions={salesOptionList}
+            onSubmittingChange={setEditSubmitting}
+            onSuccess={() => {
+              setEditModalOpen(false)
+              setEditSubmitting(false)
+              setSelectedToko(null)
+              refetch()
+            }}
+            className="space-y-4"
+          />
+        )}
+      </ModalBox>
     </TooltipProvider>
   )
 }

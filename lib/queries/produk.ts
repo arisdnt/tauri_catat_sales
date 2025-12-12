@@ -129,9 +129,11 @@ export async function updateProduk(id: number, data: {
 }) {
   try {
     const response = await apiClient.updateProduct(id, {
-      nama_produk: data.nama_produk || '',
-      harga_satuan: data.harga_satuan || 0,
-      status_produk: data.status_produk
+      nama_produk: data.nama_produk,
+      harga_satuan: data.harga_satuan,
+      status_produk: data.status_produk,
+      is_priority: data.is_priority,
+      priority_order: data.priority_order
     });
 
     if (!(response as any).success || !(response as any).data) {
@@ -240,10 +242,14 @@ export function useProdukQuery(status: 'active' | 'inactive' | 'all' = 'active')
   });
 }
 
-export function useProdukDetailQuery(id: number) {
+export function useProdukDetailQuery(id?: number, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: produkKeys.detail(id),
-    queryFn: () => apiClient.getProductById(id)
+    queryKey: id ? produkKeys.detail(id) : ['produk', 'detail', null],
+    queryFn: async () => {
+      if (!id) throw new Error('Produk ID tidak valid')
+      return apiClient.getProductById(id)
+    },
+    enabled: Boolean(id) && (options?.enabled ?? true)
   });
 }
 

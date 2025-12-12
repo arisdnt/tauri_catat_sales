@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+RESET='\033[0m'
+
+INFO_ICON='[ i ]'
+ACTION_ICON='[ >> ]'
+SUCCESS_ICON='[ OK ]'
+WARN_ICON='[ !! ]'
+
+printf "%b%s%b Staging changes...\n" "${CYAN}" "${ACTION_ICON}" "${RESET}"
+git add -A
+
+if git diff --cached --quiet; then
+  printf "%b%s%b No changes detected after staging. Nothing to do.\n" "${YELLOW}" "${WARN_ICON}" "${RESET}"
+  exit 0
+fi
+
+timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+printf "%b%s%b Committing changes with message:%b Update %s%b\n" \
+  "${CYAN}" "${ACTION_ICON}" "${RESET}" "${YELLOW}" "${timestamp}" "${RESET}"
+git commit -m "Update ${timestamp}"
+
+printf "%b%s%b Pushing to remote...\n" "${CYAN}" "${ACTION_ICON}" "${RESET}"
+git push
+printf "%b%s%b Push completed successfully.\n" "${GREEN}" "${SUCCESS_ICON}" "${RESET}"

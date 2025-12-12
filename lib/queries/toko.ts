@@ -183,11 +183,16 @@ export function useTokoFilterOptionsQuery(type: 'kabupaten' | 'kecamatan' | 'sal
   })
 }
 
-export function useTokoDetailQuery(id: number) {
+export function useTokoDetailQuery(id?: number, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: tokoKeys.detail(id),
-    queryFn: () => apiClient.getStoreById(id) as Promise<ApiResponse<Toko>>,
-    enabled: !!id,
+    queryKey: id ? tokoKeys.detail(id) : ['toko', 'detail', null],
+    queryFn: () => {
+      if (!id) {
+        throw new Error('ID toko tidak valid')
+      }
+      return apiClient.getStoreById(id) as Promise<ApiResponse<Toko>>
+    },
+    enabled: Boolean(id) && (options?.enabled ?? true),
   })
 }
 

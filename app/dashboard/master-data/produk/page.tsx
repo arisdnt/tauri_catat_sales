@@ -14,7 +14,10 @@ import {
   Activity,
   Search,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Save,
+  X
 } from 'lucide-react'
 
 import { useToast } from '@/components/ui/use-toast'
@@ -23,10 +26,14 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useNavigation } from '@/lib/hooks/use-navigation'
 
 import { useMasterProdukQuery, useMasterProdukStatsQuery, type MasterProduk } from '@/lib/queries/dashboard'
 import { formatCurrency } from '@/lib/form-utils'
+import { ModalBox } from '@/components/ui/modal-box'
+import { useProdukDetailQuery } from '@/lib/queries/produk'
+import { ProdukDetailPanel } from './components/produk-detail-panel'
+import { ProdukEditForm } from './components/produk-edit-form'
+import { ProdukCreateForm } from './components/produk-create-form'
 
 // Helper function to format numbers
 function formatNumber(num: number): string {
@@ -221,7 +228,6 @@ function useProdukColumns() {
 }
 
 export default function ProdukPage() {
-  const { navigate } = useNavigation()
   const parentRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
@@ -283,6 +289,23 @@ export default function ProdukPage() {
     }
   }
 
+  const [selectedProduk, setSelectedProduk] = useState<MasterProduk | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const modalFormId = selectedProduk
+    ? `produk-edit-form-${selectedProduk.id_produk}`
+    : undefined
+  const createFormId = "produk-create-form-modal"
+
+  const produkDetailQuery = useProdukDetailQuery(selectedProduk?.id_produk, {
+    enabled: Boolean(selectedProduk && (detailModalOpen || editModalOpen)),
+  })
+
+  const detailRecord = produkDetailQuery.data?.data as Partial<MasterProduk> | undefined
+
   // Filter handlers
   const handleFiltersChange = useCallback((newFilters: Partial<ProdukFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }))
@@ -314,13 +337,15 @@ export default function ProdukPage() {
 
   // Handle view
   const handleView = useCallback((produk: MasterProduk) => {
-    navigate(`/dashboard/master-data/produk/${produk.id_produk}`)
-  }, [navigate])
+    setSelectedProduk(produk)
+    setDetailModalOpen(true)
+  }, [])
 
   // Handle edit
   const handleEdit = useCallback((produk: MasterProduk) => {
-    navigate(`/dashboard/master-data/produk/${produk.id_produk}/edit`)
-  }, [navigate])
+    setSelectedProduk(produk)
+    setEditModalOpen(true)
+  }, [])
 
   // Handle export
   const handleExport = useCallback(() => {
@@ -336,8 +361,8 @@ export default function ProdukPage() {
 
   // Handle add new
   const handleAdd = useCallback(() => {
-    navigate('/dashboard/master-data/produk/add')
-  }, [navigate])
+    setCreateModalOpen(true)
+  }, [])
 
   // Summary statistics using filtered data from stats API
   const stats = statsData?.data || {
@@ -626,6 +651,176 @@ export default function ProdukPage() {
           )}
         </div>
       </div>
+
+      {/* Create Modal */}
+      <ModalBox
+        open={createModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open)
+          if (!open) {
+            setCreateSubmitting(false)
+          }
+        }}
+        mode="edit"
+        title="Tambah Produk"
+        description="Masukkan informasi produk baru"
+        footer={
+          <div className="flex w-full items-center justify-end gap-3">
+            <Button
+              form={createFormId}
+              type="submit"
+              disabled={createSubmitting}
+              className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              {createSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Simpan Produk
+                </>
+              )}
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                setCreateModalOpen(false)
+                setCreateSubmitting(false)
+              }}
+            >
+              <X className="h-4 w-4" />
+              Tutup
+            </Button>
+          </div>
+        }
+        className="max-w-2xl"
+      >
+        <ProdukCreateForm
+          formId={createFormId}
+          className="space-y-4"
+          onSubmittingChange={setCreateSubmitting}
+          onSuccess={() => {
+            setCreateModalOpen(false)
+            setCreateSubmitting(false)
+            refetch()
+          }}
+        />
+      </ModalBox>
+
+      {/* Detail Modal */}
+      <ModalBox
+        open={detailModalOpen && !!selectedProduk}
+        onOpenChange={(open) => {
+          setDetailModalOpen(open)
+          if (!open && !editModalOpen) {
+            setSelectedProduk(null)
+          }
+        }}
+        mode="detail"
+        title={
+          selectedProduk
+            ? `Detail Produk #${selectedProduk.id_produk}`
+            : "Detail Produk"
+        }
+        description={selectedProduk?.nama_produk}
+        className="max-w-3xl"
+      >
+        {produkDetailQuery.isLoading ? (
+          <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Memuat detail produk...
+          </div>
+        ) : produkDetailQuery.error ? (
+          <p className="text-sm text-red-600">
+            Gagal memuat detail produk.
+          </p>
+        ) : (
+          <ProdukDetailPanel
+            produk={selectedProduk}
+            detailRecord={detailRecord as any}
+          />
+        )}
+      </ModalBox>
+
+      {/* Edit Modal */}
+      <ModalBox
+        open={editModalOpen && !!selectedProduk}
+        onOpenChange={(open) => {
+          setEditModalOpen(open)
+          if (!open) {
+            setEditSubmitting(false)
+            if (!detailModalOpen) {
+              setSelectedProduk(null)
+            }
+          }
+        }}
+        mode="edit"
+        title={
+          selectedProduk
+            ? `Edit Produk #${selectedProduk.id_produk}`
+            : "Edit Produk"
+        }
+        description={selectedProduk?.nama_produk}
+        footer={
+          selectedProduk ? (
+            <div className="flex w-full items-center justify-end gap-3">
+              <Button
+                form={modalFormId}
+                type="submit"
+                disabled={editSubmitting}
+                className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {editSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Simpan Perubahan
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                onClick={() => {
+                  setEditModalOpen(false)
+                  setEditSubmitting(false)
+                  if (!detailModalOpen) {
+                    setSelectedProduk(null)
+                  }
+                }}
+              >
+                <X className="h-4 w-4" />
+                Tutup
+              </Button>
+            </div>
+          ) : undefined
+        }
+        className="max-w-3xl"
+      >
+        {selectedProduk && (
+          <ProdukEditForm
+            id={selectedProduk.id_produk}
+            formId={modalFormId}
+            initialData={{ ...selectedProduk, ...(detailRecord as any) }}
+            onSubmittingChange={setEditSubmitting}
+            onSuccess={() => {
+              setEditModalOpen(false)
+              setEditSubmitting(false)
+              setSelectedProduk(null)
+              refetch()
+            }}
+            className="space-y-4"
+          />
+        )}
+      </ModalBox>
     </div>
   )
 }

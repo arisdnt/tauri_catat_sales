@@ -14,6 +14,35 @@
 import { supabase } from './supabase'
 import { db } from './db/dexie'
 import { queueOutboxEntry } from './db/outbox'
+import {
+  optimisticInsertSales,
+  optimisticUpdateSales,
+  optimisticDeleteSales,
+  optimisticInsertProduk,
+  optimisticUpdateProduk,
+  optimisticDeleteProduk,
+  optimisticInsertToko,
+  optimisticUpdateToko,
+  optimisticDeleteToko,
+  optimisticInsertSetoran,
+  optimisticUpdateSetoran,
+  optimisticDeleteSetoran,
+  optimisticInsertShipment,
+  optimisticUpdateShipment,
+  optimisticDeleteShipment,
+  optimisticInsertBilling,
+  optimisticUpdateBilling,
+  optimisticDeleteBilling,
+  isTempId
+} from './db/optimistic'
+import {
+  invalidateSalesQueries,
+  invalidateProdukQueries,
+  invalidateTokoQueries,
+  invalidateSetoranQueries,
+  invalidatePengirimanQueries,
+  invalidatePenagihanQueries
+} from './react-query'
 
 // Helper to create success response format
 function createResponse<T>(data: T, statusCode = 200) {
@@ -54,29 +83,43 @@ class ApiClient {
   async createSales(data: { nama_sales: string; nomor_telepon?: string }) {
     if (!data.nama_sales) throwError('Nama sales is required')
 
-    // Queue insert to outbox; Realtime akan mengisi Dexie setelah berhasil
+    // Optimistic update: langsung insert ke Dexie untuk UI instant
+    const optimisticRecord = await optimisticInsertSales({
+      nama_sales: data.nama_sales,
+      nomor_telepon: data.nomor_telepon || null
+    })
+
+    // Queue insert to outbox untuk sync ke Supabase
     await queueOutboxEntry('sales', 'insert', {
       nama_sales: data.nama_sales,
       nomor_telepon: data.nomor_telepon || null,
       status_aktif: true
-    })
+    }, { localTempId: optimisticRecord._tempId })
 
-    // Tidak menunggu Supabase; kembalikan payload sebagai echo
-    return createResponse({
-      id_sales: undefined,
-      nama_sales: data.nama_sales,
-      nomor_telepon: data.nomor_telepon || null,
-      status_aktif: true
-    }, 202)
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSalesQueries()
+
+    return createResponse(optimisticRecord, 202)
   }
 
   async updateSales(id: number, data: { nama_sales: string; nomor_telepon?: string; status_aktif?: boolean }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateSales(id, {
+      nama_sales: data.nama_sales,
+      nomor_telepon: data.nomor_telepon,
+      status_aktif: data.status_aktif
+    })
+
+    // Queue update to outbox
     await queueOutboxEntry('sales', 'update', {
       id_sales: id,
       nama_sales: data.nama_sales,
       nomor_telepon: data.nomor_telepon,
       status_aktif: data.status_aktif
     }, { primaryKeyField: 'id_sales' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSalesQueries()
 
     return createResponse({
       id_sales: id,
@@ -85,10 +128,17 @@ class ApiClient {
   }
 
   async deleteSales(id: number) {
+    // Optimistic delete: langsung soft delete di Dexie
+    await optimisticDeleteSales(id)
+
+    // Queue delete to outbox (as update with status_aktif = false)
     await queueOutboxEntry('sales', 'update', {
       id_sales: id,
       status_aktif: false
     }, { primaryKeyField: 'id_sales' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSalesQueries()
 
     return createResponse({ message: 'Sales deactivated successfully' })
   }
@@ -132,6 +182,14 @@ class ApiClient {
       throwError('Harga satuan harus berupa angka positif')
     }
 
+    // Optimistic update: langsung insert ke Dexie
+    const optimisticRecord = await optimisticInsertProduk({
+      nama_produk: data.nama_produk.trim(),
+      harga_satuan: data.harga_satuan,
+      is_priority: data.is_priority,
+      priority_order: data.priority_order
+    })
+
     const payload = {
       nama_produk: data.nama_produk.trim(),
       harga_satuan: data.harga_satuan,
@@ -140,33 +198,57 @@ class ApiClient {
       priority_order: Number(data.priority_order) || 0
     }
 
-    await queueOutboxEntry('produk', 'insert', payload)
+    // Queue insert to outbox
+    await queueOutboxEntry('produk', 'insert', payload, { localTempId: optimisticRecord._tempId })
 
-    return createResponse({
-      id_produk: undefined,
-      ...payload
-    }, 202)
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateProdukQueries()
+
+    return createResponse(optimisticRecord, 202)
   }
 
-  async updateProduct(id: number, data: { nama_produk: string; harga_satuan: number; status_produk?: boolean }) {
-    await queueOutboxEntry('produk', 'update', {
-      id_produk: id,
-      nama_produk: data.nama_produk,
-      harga_satuan: data.harga_satuan,
-      status_produk: data.status_produk
-    }, { primaryKeyField: 'id_produk' })
+  async updateProduct(id: number, data: {
+    nama_produk?: string
+    harga_satuan?: number
+    status_produk?: boolean
+    is_priority?: boolean
+    priority_order?: number
+  }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateProduk(id, data)
+
+    const payload: Record<string, any> = { id_produk: id }
+
+    if (data.nama_produk !== undefined) payload.nama_produk = data.nama_produk
+    if (data.harga_satuan !== undefined) payload.harga_satuan = data.harga_satuan
+    if (data.status_produk !== undefined) payload.status_produk = data.status_produk
+    if (data.is_priority !== undefined) payload.is_priority = data.is_priority
+    if (data.priority_order !== undefined) payload.priority_order = data.priority_order
+
+    // Queue update to outbox
+    await queueOutboxEntry('produk', 'update', payload, { primaryKeyField: 'id_produk' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateProdukQueries()
 
     return createResponse({
       id_produk: id,
-      ...data
+      ...payload
     })
   }
 
   async deleteProduct(id: number) {
+    // Optimistic delete: langsung soft delete di Dexie
+    await optimisticDeleteProduk(id)
+
+    // Queue delete to outbox
     await queueOutboxEntry('produk', 'update', {
       id_produk: id,
       status_produk: false
     }, { primaryKeyField: 'id_produk' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateProdukQueries()
 
     return createResponse({ message: 'Product deactivated successfully' })
   }
@@ -236,16 +318,16 @@ class ApiClient {
     const pageRows = dataWithSales.slice(offset, offset + limitNum)
 
     return createResponse({
-        data: pageRows,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: totalCount,
-          totalPages,
-          hasNextPage: pageNum < totalPages,
-          hasPrevPage: pageNum > 1
-        }
-      })
+      data: pageRows,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    })
   }
 
   async get(url: string) {
@@ -267,11 +349,11 @@ class ApiClient {
       ...toko,
       sales: sales
         ? {
-            id_sales: sales.id_sales,
-            nama_sales: sales.nama_sales,
-            nomor_telepon: sales.nomor_telepon,
-            status_aktif: sales.status_aktif
-          }
+          id_sales: sales.id_sales,
+          nama_sales: sales.nama_sales,
+          nomor_telepon: sales.nomor_telepon,
+          status_aktif: sales.status_aktif
+        }
         : undefined
     }
 
@@ -292,6 +374,16 @@ class ApiClient {
       throwError('Nama toko and id_sales are required')
     }
 
+    // Optimistic update: langsung insert ke Dexie
+    const optimisticRecord = await optimisticInsertToko({
+      id_sales: data.id_sales,
+      nama_toko: data.nama_toko,
+      kecamatan: data.kecamatan || null,
+      kabupaten: data.kabupaten || null,
+      no_telepon: data.no_telepon || null,
+      link_gmaps: data.link_gmaps || null
+    })
+
     const payload = {
       nama_toko: data.nama_toko,
       id_sales: data.id_sales,
@@ -302,22 +394,25 @@ class ApiClient {
       status_toko: true
     }
 
-    await queueOutboxEntry('toko', 'insert', payload)
+    // Queue insert to outbox
+    await queueOutboxEntry('toko', 'insert', payload, { localTempId: optimisticRecord._tempId })
 
     const sales = await db.sales.get(data.id_sales)
 
     const result: any = {
-      id_toko: undefined,
-      ...payload,
+      ...optimisticRecord,
       sales: sales
         ? {
-            id_sales: sales.id_sales,
-            nama_sales: sales.nama_sales,
-            nomor_telepon: sales.nomor_telepon,
-            status_aktif: sales.status_aktif
-          }
+          id_sales: sales.id_sales,
+          nama_sales: sales.nama_sales,
+          nomor_telepon: sales.nomor_telepon,
+          status_aktif: sales.status_aktif
+        }
         : undefined
     }
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateTokoQueries()
 
     return createResponse(result, 202)
   }
@@ -333,6 +428,17 @@ class ApiClient {
     link_gmaps?: string
     status_toko?: boolean
   }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateToko(id, {
+      id_sales: data.id_sales,
+      nama_toko: data.nama_toko,
+      kecamatan: data.kecamatan ?? null,
+      kabupaten: data.kabupaten ?? null,
+      no_telepon: data.no_telepon ?? null,
+      link_gmaps: data.link_gmaps ?? null,
+      status_toko: data.status_toko
+    })
+
     const payload = {
       id_toko: id,
       nama_toko: data.nama_toko,
@@ -344,6 +450,7 @@ class ApiClient {
       status_toko: data.status_toko
     }
 
+    // Queue update to outbox
     await queueOutboxEntry('toko', 'update', payload, {
       primaryKeyField: 'id_toko'
     })
@@ -354,18 +461,25 @@ class ApiClient {
       ...payload,
       sales: sales
         ? {
-            id_sales: sales.id_sales,
-            nama_sales: sales.nama_sales,
-            nomor_telepon: sales.nomor_telepon,
-            status_aktif: sales.status_aktif
-          }
+          id_sales: sales.id_sales,
+          nama_sales: sales.nama_sales,
+          nomor_telepon: sales.nomor_telepon,
+          status_aktif: sales.status_aktif
+        }
         : undefined
     }
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateTokoQueries()
 
     return createResponse(result)
   }
 
   async deleteStore(id: number) {
+    // Optimistic delete: langsung soft delete di Dexie
+    await optimisticDeleteToko(id)
+
+    // Queue delete to outbox
     await queueOutboxEntry(
       'toko',
       'update',
@@ -375,6 +489,9 @@ class ApiClient {
       },
       { primaryKeyField: 'id_toko' }
     )
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateTokoQueries()
 
     return createResponse({ message: 'Store deactivated successfully' })
   }
@@ -460,16 +577,21 @@ class ApiClient {
   }
 
   async getShipmentById(id: number) {
-    const [pengiriman, tokoData, detailData, produkData] = await Promise.all([
-      db.pengiriman.get(id),
-      db.toko.toArray(),
-      db.detail_pengiriman.where('id_pengiriman').equals(id).toArray(),
-      db.produk.toArray()
-    ])
+    let pengiriman = await db.pengiriman.get(id)
+    if (!pengiriman) {
+      await this.hydrateShipmentFromSupabase(id)
+      pengiriman = await db.pengiriman.get(id)
+    }
 
     if (!pengiriman) {
       throwError('Pengiriman not found')
     }
+
+    const [tokoData, detailData, produkData] = await Promise.all([
+      db.toko.toArray(),
+      db.detail_pengiriman.where('id_pengiriman').equals(id).toArray(),
+      db.produk.toArray()
+    ])
 
     const tokoMap = new Map(tokoData.map(t => [t.id_toko, t]))
     const produkMap = new Map(produkData.map(p => [p.id_produk, p]))
@@ -486,7 +608,7 @@ class ApiClient {
     const detail_pengiriman = detailData.map(d => {
       const produk = produkMap.get(d.id_produk)
       return {
-        id_detail_pengiriman: d.id_detail_kirim,
+        id_detail_kirim: d.id_detail_kirim,
         id_produk: d.id_produk,
         jumlah_kirim: d.jumlah_kirim,
         produk: produk ? {
@@ -514,11 +636,22 @@ class ApiClient {
       jumlah_kirim: number
     }>
   }) {
-    await queueOutboxEntry('pengiriman', 'shipment_create', data)
+    // Optimistic update: langsung insert ke Dexie
+    const optimisticResult = await optimisticInsertShipment({
+      id_toko: data.id_toko,
+      tanggal_kirim: data.tanggal_kirim,
+      details: data.details
+    })
+
+    // Queue shipment create to outbox
+    await queueOutboxEntry('pengiriman', 'shipment_create', data, { localTempId: optimisticResult.pengiriman._tempId })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePengirimanQueries()
 
     return createResponse({
-      id_pengiriman: undefined,
-      ...data
+      ...optimisticResult.pengiriman,
+      details: data.details
     }, 202)
   }
 
@@ -529,10 +662,20 @@ class ApiClient {
       jumlah_kirim: number
     }>
   }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateShipment(id, {
+      tanggal_kirim: data.tanggal_kirim,
+      details: data.details
+    })
+
+    // Queue update to outbox
     await queueOutboxEntry('pengiriman', 'shipment_update', {
       id_pengiriman: id,
       ...data
     })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePengirimanQueries()
 
     return createResponse({
       id_pengiriman: id,
@@ -541,7 +684,15 @@ class ApiClient {
   }
 
   async deleteShipment(id: number) {
+    // Optimistic delete: langsung hapus di Dexie
+    await optimisticDeleteShipment(id)
+
+    // Queue delete to outbox
     await queueOutboxEntry('pengiriman', 'shipment_delete', { id_pengiriman: id })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePengirimanQueries()
+
     return createResponse({ message: 'Shipment deleted successfully' })
   }
 
@@ -670,6 +821,145 @@ class ApiClient {
   // BILLING (PENAGIHAN) API
   // ============================================================
 
+  private async hydrateBillingFromSupabase(id: number) {
+    try {
+      const { data: billing, error } = await supabase
+        .from('penagihan')
+        .select('*')
+        .eq('id_penagihan', id)
+        .maybeSingle()
+
+      if (error || !billing) {
+        console.warn('[ApiClient] Penagihan not found in Supabase:', id, error)
+        return null
+      }
+
+      await db.penagihan.put(billing)
+
+      const [{ data: detailRows, error: detailError }, { data: potonganRows, error: potonganError }] = await Promise.all([
+        supabase.from('detail_penagihan').select('*').eq('id_penagihan', id),
+        supabase.from('potongan_penagihan').select('*').eq('id_penagihan', id)
+      ])
+
+      if (!detailError && detailRows && detailRows.length > 0) {
+        await db.detail_penagihan.bulkPut(detailRows)
+      }
+      if (!potonganError && potonganRows && potonganRows.length > 0) {
+        await db.potongan_penagihan.bulkPut(potonganRows)
+      }
+
+      if (billing.id_toko) {
+        let tokoRow = await db.toko.get(billing.id_toko)
+        if (!tokoRow) {
+          const { data: tokoFromSupabase } = await supabase
+            .from('toko')
+            .select('*')
+            .eq('id_toko', billing.id_toko)
+            .maybeSingle()
+          if (tokoFromSupabase) {
+            await db.toko.put(tokoFromSupabase)
+            tokoRow = tokoFromSupabase
+          }
+        }
+
+        if (tokoRow?.id_sales) {
+          const salesRow = await db.sales.get(tokoRow.id_sales)
+          if (!salesRow) {
+            const { data: salesFromSupabase } = await supabase
+              .from('sales')
+              .select('*')
+              .eq('id_sales', tokoRow.id_sales)
+              .maybeSingle()
+            if (salesFromSupabase) {
+              await db.sales.put(salesFromSupabase)
+            }
+          }
+        }
+      }
+
+      return billing
+    } catch (error) {
+      console.error('[ApiClient] Failed to hydrate billing from Supabase:', id, error)
+      return null
+    }
+  }
+
+  private async hydrateShipmentFromSupabase(id: number) {
+    try {
+      const { data: shipment, error } = await supabase
+        .from('pengiriman')
+        .select('*')
+        .eq('id_pengiriman', id)
+        .maybeSingle()
+
+      if (error || !shipment) {
+        console.warn('[ApiClient] Pengiriman not found in Supabase:', id, error)
+        return null
+      }
+
+      await db.pengiriman.put(shipment)
+
+      const { data: detailRows, error: detailError } = await supabase
+        .from('detail_pengiriman')
+        .select('*')
+        .eq('id_pengiriman', id)
+
+      if (!detailError && detailRows && detailRows.length > 0) {
+        await db.detail_pengiriman.bulkPut(detailRows)
+
+        const missingProductIds = new Set<number>()
+        for (const row of detailRows) {
+          if (!(await db.produk.get(row.id_produk))) {
+            missingProductIds.add(row.id_produk)
+          }
+        }
+        if (missingProductIds.size > 0) {
+          const { data: productRows } = await supabase
+            .from('produk')
+            .select('*')
+            .in('id_produk', Array.from(missingProductIds))
+          if (productRows && productRows.length > 0) {
+            await db.produk.bulkPut(productRows)
+          }
+        }
+      }
+
+      if (shipment.id_toko) {
+        let tokoRow = await db.toko.get(shipment.id_toko)
+        if (!tokoRow) {
+          const { data: tokoFromSupabase } = await supabase
+            .from('toko')
+            .select('*')
+            .eq('id_toko', shipment.id_toko)
+            .maybeSingle()
+          if (tokoFromSupabase) {
+            await db.toko.put(tokoFromSupabase)
+            tokoRow = tokoFromSupabase
+          }
+        }
+
+        if (tokoRow?.id_sales) {
+          const salesRow = await db.sales.get(tokoRow.id_sales)
+          if (!salesRow) {
+            const { data: salesFromSupabase } = await supabase
+              .from('sales')
+              .select('*')
+              .eq('id_sales', tokoRow.id_sales)
+              .maybeSingle()
+            if (salesFromSupabase) {
+              await db.sales.put(salesFromSupabase)
+            }
+          }
+        }
+      }
+
+      return shipment
+    } catch (error) {
+      console.error('[ApiClient] Failed to hydrate pengiriman from Supabase:', id, error)
+      return null
+    }
+  }
+
   async getBillings(includeDetails?: boolean) {
     const [
       penagihanData,
@@ -760,18 +1050,22 @@ class ApiClient {
   }
 
   async getBillingById(id: number) {
-    const [penagihan, tokoData, salesData, detailData, produkData, potonganData] = await Promise.all([
-      db.penagihan.get(id),
+    let penagihan = await db.penagihan.get(id)
+    if (!penagihan) {
+      penagihan = await this.hydrateBillingFromSupabase(id)
+    }
+
+    if (!penagihan) {
+      throwError('Penagihan not found')
+    }
+
+    const [tokoData, salesData, detailData, produkData, potonganData] = await Promise.all([
       db.toko.toArray(),
       db.sales.toArray(),
       db.detail_penagihan.where('id_penagihan').equals(id).toArray(),
       db.produk.toArray(),
       db.potongan_penagihan.where('id_penagihan').equals(id).toArray()
     ])
-
-    if (!penagihan) {
-      throwError('Penagihan not found')
-    }
 
     const tokoMap = new Map(tokoData.map(t => [t.id_toko, t]))
     const salesMap = new Map(salesData.map(s => [s.id_sales, s]))
@@ -846,16 +1140,29 @@ class ApiClient {
       }>
     }
   }) {
+    // Optimistic update: langsung insert ke Dexie
+    const optimisticResult = await optimisticInsertBilling({
+      id_toko: data.id_toko,
+      total_uang_diterima: data.total_uang_diterima,
+      metode_pembayaran: data.metode_pembayaran,
+      ada_potongan: !!(data.potongan && data.potongan.jumlah_potongan > 0),
+      details: data.details,
+      potongan: data.potongan
+    })
+
     // Queue bundled billing operation ke outbox.
     // Worker Outbox akan menjalankan seluruh proses di Supabase.
-    await queueOutboxEntry('penagihan', 'billing_create', data)
+    await queueOutboxEntry('penagihan', 'billing_create', data, { localTempId: optimisticResult.penagihan._tempId })
 
     // Hitung flag untuk feedback UI (tidak menunggu Supabase).
     const hasReturnedItems = data.details.some(d => d.jumlah_kembali > 0)
     const hasAdditionalShipment = !!(data.additional_shipment?.enabled && data.additional_shipment.details.length > 0)
 
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePenagihanQueries()
+
     return createResponse({
-      id_penagihan: undefined,
+      ...optimisticResult.penagihan,
       auto_restock_shipment: data.auto_restock && hasReturnedItems,
       additional_shipment: hasAdditionalShipment
     }, 202)
@@ -874,10 +1181,22 @@ class ApiClient {
       alasan?: string
     }
   }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateBilling(id, {
+      total_uang_diterima: data.total_uang_diterima,
+      metode_pembayaran: data.metode_pembayaran,
+      details: data.details,
+      potongan: data.potongan
+    })
+
+    // Queue update to outbox
     await queueOutboxEntry('penagihan', 'billing_update', {
       id_penagihan: id,
       ...data
     })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePenagihanQueries()
 
     return createResponse({
       id_penagihan: id,
@@ -886,7 +1205,15 @@ class ApiClient {
   }
 
   async deleteBilling(id: number) {
+    // Optimistic delete: langsung hapus di Dexie
+    await optimisticDeleteBilling(id)
+
+    // Queue delete to outbox
     await queueOutboxEntry('penagihan', 'billing_delete', { id_penagihan: id })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidatePenagihanQueries()
+
     return createResponse({ message: 'Billing deleted successfully' })
   }
 
@@ -920,29 +1247,45 @@ class ApiClient {
   }) {
     const today = new Date().toISOString().split('T')[0]
 
-    await queueOutboxEntry('setoran', 'insert', {
+    // Optimistic update: langsung insert ke Dexie
+    const optimisticRecord = await optimisticInsertSetoran({
       total_setoran: data.total_setoran,
       penerima_setoran: data.penerima_setoran,
       tanggal_setoran: today
     })
 
-    return createResponse({
-      id_setoran: undefined,
+    // Queue insert to outbox
+    await queueOutboxEntry('setoran', 'insert', {
       total_setoran: data.total_setoran,
       penerima_setoran: data.penerima_setoran,
       tanggal_setoran: today
-    }, 202)
+    }, { localTempId: optimisticRecord._tempId })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSetoranQueries()
+
+    return createResponse(optimisticRecord, 202)
   }
 
   async updateDeposit(id: number, data: {
     total_setoran: number
     penerima_setoran: string
   }) {
+    // Optimistic update: langsung update Dexie
+    await optimisticUpdateSetoran(id, {
+      total_setoran: data.total_setoran,
+      penerima_setoran: data.penerima_setoran
+    })
+
+    // Queue update to outbox
     await queueOutboxEntry('setoran', 'update', {
       id_setoran: id,
       total_setoran: data.total_setoran,
       penerima_setoran: data.penerima_setoran
     }, { primaryKeyField: 'id_setoran' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSetoranQueries()
 
     return createResponse({
       id_setoran: id,
@@ -951,9 +1294,16 @@ class ApiClient {
   }
 
   async deleteDeposit(id: number) {
+    // Optimistic delete: langsung mark as deleted di Dexie
+    await optimisticDeleteSetoran(id)
+
+    // Queue delete to outbox
     await queueOutboxEntry('setoran', 'delete', {
       id_setoran: id
     }, { primaryKeyField: 'id_setoran' })
+
+    // Invalidate queries to trigger re-fetch from Dexie
+    invalidateSetoranQueries()
 
     return createResponse({ message: 'Deposit deleted successfully' })
   }
@@ -1610,8 +1960,56 @@ class ApiClient {
     const limit = params?.limit || 25
     const offset = (page - 1) * limit
 
-    let rows = await db.v_master_toko.toArray()
+    // Fetch base table and view data
+    const [tokoRows, viewRows, salesRows] = await Promise.all([
+      db.toko.toArray(),
+      db.v_master_toko.toArray(),
+      db.sales.toArray()
+    ])
 
+    // Create maps for joining
+    const viewById = new Map<number, any>(
+      viewRows.map((row: any) => [row.id_toko, row])
+    )
+    const salesById = new Map<number, any>(
+      salesRows.map((row: any) => [row.id_sales, row])
+    )
+
+    // Merge: base table data + view stats + sales info
+    // Base table is the source of truth for basic fields (optimistic updates go here)
+    // View provides computed stats that are eventually consistent
+    let rows = tokoRows
+      .filter((t: any) => !t._deleted) // Exclude soft-deleted optimistic records
+      .map((t: any) => {
+        const v = viewById.get(t.id_toko) || {}
+        const s = salesById.get(t.id_sales) || {}
+        return {
+          id_toko: t.id_toko,
+          nama_toko: t.nama_toko,
+          kecamatan: t.kecamatan,
+          kabupaten: t.kabupaten,
+          link_gmaps: t.link_gmaps,
+          no_telepon: t.no_telepon,
+          status_toko: t.status_toko,
+          id_sales: t.id_sales,
+          nama_sales: s.nama_sales || v.nama_sales || '',
+          telepon_sales: s.nomor_telepon || v.telepon_sales || '',
+          dibuat_pada: t.dibuat_pada,
+          diperbarui_pada: t.diperbarui_pada,
+          // Stats from view (eventually consistent)
+          quantity_shipped: v.quantity_shipped || 0,
+          quantity_sold: v.quantity_sold || 0,
+          quantity_returned: v.quantity_returned || 0,
+          remaining_stock: v.remaining_stock || 0,
+          total_revenue: v.total_revenue || 0,
+          detail_shipped: v.detail_shipped,
+          detail_sold: v.detail_sold,
+          // Pending flag for UI feedback
+          _pending: t._pending
+        }
+      })
+
+    // Apply filters
     if (params?.search) {
       const search = params.search.toLowerCase()
       rows = rows.filter((r: any) =>

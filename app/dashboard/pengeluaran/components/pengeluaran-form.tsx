@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ModalBox } from '@/components/ui/modal-box'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,7 +31,7 @@ export function PengeluaranForm({ open, onOpenChange }: PengeluaranFormProps) {
   const { toast } = useToast()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  
+
   const createMutation = useCreatePengeluaran()
 
   const form = useForm<FormData>({
@@ -70,7 +70,7 @@ export function PengeluaranForm({ open, onOpenChange }: PengeluaranFormProps) {
 
       setSelectedFile(file)
       form.setValue('bukti_foto', file)
-      
+
       // Create preview URL
       const url = URL.createObjectURL(file)
       setPreviewUrl(url)
@@ -92,18 +92,18 @@ export function PengeluaranForm({ open, onOpenChange }: PengeluaranFormProps) {
       formData.append('jumlah', data.jumlah.toString())
       formData.append('keterangan', data.keterangan)
       formData.append('tanggal_pengeluaran', new Date(data.tanggal_pengeluaran).toISOString())
-      
+
       if (data.bukti_foto) {
         formData.append('bukti_foto', data.bukti_foto)
       }
 
       await createMutation.mutateAsync(formData)
-      
+
       toast({
         title: 'Berhasil',
         description: 'Pengeluaran berhasil disimpan',
       })
-      
+
       // Reset form and close dialog
       form.reset()
       removeFile()
@@ -124,146 +124,151 @@ export function PengeluaranForm({ open, onOpenChange }: PengeluaranFormProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Tambah Pengeluaran Baru</DialogTitle>
-        </DialogHeader>
-        
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="tanggal_pengeluaran"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tanggal Pengeluaran</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="datetime-local"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+    <ModalBox
+      open={open}
+      onOpenChange={handleClose}
+      mode="edit"
+      title="Tambah Pengeluaran Baru"
+      footer={
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClose}
+            disabled={createMutation.isPending}
+            className="h-8 px-3"
+          >
+            <X className="mr-2 h-4 w-4" />
+            Batal
+          </Button>
+          <Button
+            form="pengeluaran-form"
+            type="submit"
+            size="sm"
+            disabled={createMutation.isPending}
+            className="h-8 px-3"
+          >
+            {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
+          </Button>
+        </div>
+      }
+    >
+      <Form {...form}>
+        <form id="pengeluaran-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="tanggal_pengeluaran"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tanggal Pengeluaran</FormLabel>
+                <FormControl>
+                  <Input
+                    type="datetime-local"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="jumlah"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Jumlah (Rp)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="jumlah"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Jumlah (Rp)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="keterangan"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Keterangan</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Deskripsi pengeluaran..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="keterangan"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Keterangan</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Deskripsi pengeluaran..."
+                    className="resize-none"
+                    rows={3}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="bukti_foto"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Bukti Foto (Opsional)</FormLabel>
-                  <FormControl>
-                    <div className="space-y-2">
-                      {!selectedFile ? (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                          <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600 mb-2">
-                            Klik untuk upload atau drag & drop
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            PNG, JPG hingga 5MB
-                          </p>
-                          <Input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <div className="border rounded-lg p-4 bg-gray-50">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium truncate">
-                                {selectedFile.name}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={removeFile}
-                                className="h-6 w-6 p-0 text-gray-500 hover:text-red-600"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            {previewUrl && (
-                              <img
-                                src={previewUrl}
-                                alt="Preview"
-                                className="w-full h-32 object-cover rounded border"
-                              />
-                            )}
+          <FormField
+            control={form.control}
+            name="bukti_foto"
+            render={() => (
+              <FormItem>
+                <FormLabel>Bukti Foto (Opsional)</FormLabel>
+                <FormControl>
+                  <div className="space-y-2">
+                    {!selectedFile ? (
+                      <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                        <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">
+                          Klik untuk upload atau drag & drop
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          PNG, JPG hingga 5MB
+                        </p>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="border rounded-lg p-4 bg-gray-50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium truncate">
+                              {selectedFile.name}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={removeFile}
+                              className="h-6 w-6 p-0 text-gray-500 hover:text-red-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
+                          {previewUrl && (
+                            <img
+                              src={previewUrl}
+                              alt="Preview"
+                              className="w-full h-32 object-cover rounded border"
+                            />
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                disabled={createMutation.isPending}
-              >
-                Batal
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending}
-              >
-                {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                      </div>
+                    )}
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
+    </ModalBox>
   )
 }

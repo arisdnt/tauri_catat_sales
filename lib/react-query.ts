@@ -20,3 +20,50 @@ export const queryClient = new QueryClient({
     },
   },
 })
+
+/**
+ * Query invalidation utilities for optimistic updates
+ * Call these after CRUD operations to immediately refresh list pages
+ */
+
+export function invalidateSalesQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'master', 'sales'] })
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'filters', 'sales'] })
+  queryClient.invalidateQueries({ queryKey: ['sales'] })
+}
+
+export function invalidateProdukQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'master', 'produk'] })
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'filters', 'produk'] })
+  queryClient.invalidateQueries({ queryKey: ['produk'] })
+}
+
+export function invalidateTokoQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'master', 'toko'] })
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'filters', 'toko'] })
+  queryClient.invalidateQueries({ queryKey: ['toko'] })
+}
+
+export function invalidateSetoranQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'setoran'] })
+  queryClient.invalidateQueries({ queryKey: ['setoran'] })
+}
+
+export function invalidatePengirimanQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'pengiriman'] })
+  queryClient.invalidateQueries({ queryKey: ['pengiriman'] })
+}
+
+export function invalidatePenagihanQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'penagihan'] })
+  queryClient.invalidateQueries({ queryKey: ['penagihan'] })
+}
+
+export function invalidatePengeluaranQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard', 'pengeluaran'] })
+  queryClient.invalidateQueries({ queryKey: ['pengeluaran'] })
+}
+
+export function invalidateAllDashboardQueries() {
+  queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+}

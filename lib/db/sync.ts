@@ -264,7 +264,58 @@ export function setupRealtimeSync() {
 }
 
 /**
+ * View dependencies - which views depend on which base tables
+ */
+const VIEW_DEPENDENCIES: Partial<Record<TableName, ViewTableName[]>> = {
+    sales: ['v_master_sales', 'v_sales_options'],
+    produk: ['v_master_produk', 'v_produk_options', 'v_chart_produk_performance'],
+    toko: ['v_master_toko', 'v_toko_options', 'v_chart_toko_performance', 'v_kabupaten_options', 'v_kecamatan_options'],
+    penagihan: ['v_penagihan_dashboard', 'v_dashboard_cards', 'v_dashboard_overview', 'v_dashboard_latest_transactions', 'v_dashboard_all_transactions', 'v_cash_flow_dashboard', 'v_cash_flow_events'],
+    detail_penagihan: ['v_penagihan_dashboard', 'v_chart_produk_performance'],
+    potongan_penagihan: ['v_penagihan_dashboard'],
+    pengiriman: ['v_pengiriman_dashboard', 'v_dashboard_cards'],
+    detail_pengiriman: ['v_pengiriman_dashboard', 'v_chart_produk_performance'],
+    setoran: ['v_setoran_dashboard', 'v_setoran_dashboard_fixed', 'v_rekonsiliasi_setoran', 'v_cash_flow_dashboard', 'v_cash_flow_events'],
+    pengeluaran_operasional: ['v_cash_flow_dashboard', 'v_cash_flow_events']
+}
+
+// Debounce state for view refresh
+let viewRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let pendingViews: Set<ViewTableName> = new Set()
+
+/**
+ * Debounced view refresh - batches multiple view refresh requests
+ */
+function scheduleViewRefresh(views: ViewTableName[]) {
+    views.forEach(v => pendingViews.add(v))
+
+    if (viewRefreshTimer) {
+        clearTimeout(viewRefreshTimer)
+    }
+
+    viewRefreshTimer = setTimeout(async () => {
+        const viewsToRefresh = Array.from(pendingViews)
+        pendingViews.clear()
+        viewRefreshTimer = null
+
+        if (viewsToRefresh.length === 0) return
+
+        console.log('[Realtime] Refreshing dependent views:', viewsToRefresh)
+
+        // Refresh views in parallel with limited concurrency
+        const concurrency = 2
+        for (let i = 0; i < viewsToRefresh.length; i += concurrency) {
+            const batch = viewsToRefresh.slice(i, i + concurrency)
+            await Promise.all(batch.map(v => syncViewTable(v)))
+        }
+
+        console.log('[Realtime] View refresh complete')
+    }, 1000) // 1 second debounce
+}
+
+/**
  * Handle realtime changes from Supabase
+ * Enhanced to support optimistic update reconciliation
  */
 async function handleRealtimeChange(
     tableName: TableName,
@@ -277,23 +328,87 @@ async function handleRealtimeChange(
 
     try {
         switch (payload.eventType) {
-            case 'INSERT':
-            case 'UPDATE':
+            case 'INSERT': {
+                // Check for pending optimistic records to reconcile
+                const pendingRecords = await dexieTable
+                    .filter((r: any) => r._pending === true && r._tempId !== undefined)
+                    .toArray()
+
+                // Find and remove matching pending record
+                for (const pending of pendingRecords) {
+                    if (shouldReconcile(tableName, pending, payload.new)) {
+                        console.log(`[Realtime] Reconciling temp record ${pending[config.pk]} with real ${payload.new[config.pk]}`)
+                        await dexieTable.delete(pending[config.pk])
+                        break
+                    }
+                }
+
+                // Put the real record from Supabase
                 await dexieTable.put(payload.new)
                 break
+            }
 
-            case 'DELETE':
+            case 'UPDATE': {
+                // Simply put the real record, overwriting any pending state
+                // The real record from Supabase is the source of truth
+                await dexieTable.put(payload.new)
+                break
+            }
+
+            case 'DELETE': {
                 const id = payload.old[config.pk]
                 if (id) {
                     await dexieTable.delete(id)
                 }
                 break
+            }
+        }
+
+        // Trigger view refresh for dependent views
+        const dependentViews = VIEW_DEPENDENCIES[tableName]
+        if (dependentViews && dependentViews.length > 0) {
+            scheduleViewRefresh(dependentViews)
         }
 
         emitSyncEvent({ type: 'realtime-update', table: tableName })
 
     } catch (error) {
         console.error(`[Realtime] Error handling ${tableName} change:`, error)
+    }
+}
+
+/**
+ * Determine if a pending optimistic record should be reconciled with a real record
+ */
+function shouldReconcile(tableName: TableName, pending: any, real: any): boolean {
+    switch (tableName) {
+        case 'sales':
+            return pending.nama_sales === real.nama_sales
+        case 'produk':
+            return pending.nama_produk === real.nama_produk && pending.harga_satuan === real.harga_satuan
+        case 'toko':
+            return pending.nama_toko === real.nama_toko && pending.id_sales === real.id_sales
+        case 'setoran':
+            return pending.total_setoran === real.total_setoran &&
+                pending.penerima_setoran === real.penerima_setoran
+        case 'pengeluaran_operasional':
+            return pending.keterangan === real.keterangan && pending.jumlah === real.jumlah
+        case 'pengiriman':
+            return pending.id_toko === real.id_toko && pending.tanggal_kirim === real.tanggal_kirim
+        case 'penagihan':
+            return pending.id_toko === real.id_toko &&
+                pending.total_uang_diterima === real.total_uang_diterima &&
+                pending.metode_pembayaran === real.metode_pembayaran
+        case 'detail_pengiriman':
+            return pending.id_pengiriman === real.id_pengiriman &&
+                pending.id_produk === real.id_produk
+        case 'detail_penagihan':
+            return pending.id_penagihan === real.id_penagihan &&
+                pending.id_produk === real.id_produk
+        case 'potongan_penagihan':
+            return pending.id_penagihan === real.id_penagihan
+        default:
+            return false
     }
 }
 
@@ -306,6 +421,13 @@ export function stopRealtimeSync() {
         realtimeChannel = null
         console.log('[Realtime] Unsubscribed')
     }
+
+    // Clear any pending view refresh
+    if (viewRefreshTimer) {
+        clearTimeout(viewRefreshTimer)
+        viewRefreshTimer = null
+        pendingViews.clear()
+    }
 }
 
 /**
@@ -313,6 +435,15 @@ export function stopRealtimeSync() {
  */
 export async function refreshTable(tableName: TableName) {
     await syncTable(tableName)
+}
+
+/**
+ * Force refresh specific views
+ */
+export async function refreshViews(views: ViewTableName[]) {
+    for (const view of views) {
+        await syncViewTable(view)
+    }
 }
 
 /**

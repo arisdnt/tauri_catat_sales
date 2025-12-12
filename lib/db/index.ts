@@ -25,6 +25,7 @@ export {
     setupRealtimeSync,
     stopRealtimeSync,
     refreshTable,
+    refreshViews,
     getSyncStatus,
     isCacheValid,
     onSyncEvent
@@ -49,3 +50,9 @@ export {
 
 // Provider
 export { SyncProvider, useSyncStatus, SyncStatusIndicator } from './provider'
+
+// Optimistic update utilities
+export {
+    isTempId,
+    generateTempId
+} from './optimistic'
